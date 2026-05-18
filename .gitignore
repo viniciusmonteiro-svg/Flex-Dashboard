@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+dist/
+
+# Environment files (never commit real values)
+.env.local
+.env.*.local
+
+# Data ingested locally (Phase 2+)
+data/
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+*.swp
