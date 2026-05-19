@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatCurrency, formatMonth, formatMonthShort } from '@/lib/format';
 import { cn } from '@/lib/cn';
-import type { ChannelDetailResponse, ChannelDetailRow } from '@/app/api/channel-detail/route';
+import type { ChannelDetailResponse, ChannelDetailRow } from '@/app/api/channel-costs/route';
 
 type View = 'monthly' | 'quarterly' | 'yearly';
 
@@ -465,7 +465,7 @@ function GlGroupRows({ gl, channelName, latestIdx }: { gl: GlGroup; channelName:
   );
 }
 
-export default function ChannelDetailClient() {
+export default function ChannelCostsClient() {
   const [channel, setChannel] = useState('all');
   const [view, setView] = useState<View>('quarterly');
   const [year, setYear] = useState('all');
@@ -476,7 +476,7 @@ export default function ChannelDetailClient() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/channel-detail/months')
+    fetch('/api/channel-costs/months')
       .then((r) => r.json())
       .then((j) => setMonths(j.months ?? []))
       .catch(() => {});
@@ -496,7 +496,7 @@ export default function ChannelDetailClient() {
       } else if (y !== 'all') {
         params.set('year', y);
       }
-      const res = await fetch(`/api/channel-detail?${params}`);
+      const res = await fetch(`/api/channel-costs?${params}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Failed to load');
       setData(json);
@@ -567,7 +567,7 @@ export default function ChannelDetailClient() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `channel-detail-${channel}-${effectiveView}-${monthKey}.csv`;
+    a.download = `channel-costs-${channel}-${effectiveView}-${monthKey}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }, [data, channel, effectiveView, monthKey]);
@@ -577,7 +577,7 @@ export default function ChannelDetailClient() {
       {/* Controls */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-semibold text-gray-900">Channel Detail</h1>
+          <h1 className="text-2xl font-semibold text-gray-900">Channel Costs</h1>
           {showingLabel && (
             <span className="text-sm text-[var(--color-primary)] font-medium bg-[var(--color-primary)]/10 px-2 py-1 rounded">
               Showing: {showingLabel}

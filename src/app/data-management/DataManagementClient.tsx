@@ -1,321 +1,387 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import path from 'path';
-import { formatMonth } from '@/lib/format';
+import { useCallback, useEffect, useState } from 'react';
+import { formatMonthShort } from '@/lib/format';
 import { cn } from '@/lib/cn';
+import type { DataManagementResponse, DmFileInfo, DmSourceSection } from '@/app/api/data-management/route';
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-interface StatusData {
-  latest_month: string | null;
-  spend_rows: number;
-  leads_rows: number;
-  last_ingested_at: string | null;
+function formatTs(iso: string | null): string {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
-interface HistoryRow {
-  file_path: string;
-  source_name: string;
-  row_count: number;
-  ingested_at: string;
+// ─── Badge components ─────────────────────────────────────────────────────────
+
+function ScanBadge({ status }: { status: DmFileInfo['scan_status'] }) {
+  const cfg: Record<DmFileInfo['scan_status'], { cls: string; label: string }> = {
+    new:        { cls: 'bg-blue-100 text-blue-700',   label: 'new' },
+    updated:    { cls: 'bg-amber-100 text-amber-700', label: 'updated' },
+    unchanged:  { cls: 'bg-gray-100 text-gray-500',   label: 'unchanged' },
+    not_synced: { cls: 'bg-red-100 text-red-700',     label: 'not synced' },
+  };
+  const { cls, label } = cfg[status];
+  return (
+    <span className={cn('inline-block rounded px-2 py-0.5 text-xs font-medium', cls)}>
+      {label}
+    </span>
+  );
 }
 
-interface PreviewSourceResult {
+function DbBadge({ status }: { status: DmFileInfo['db_status'] }) {
+  if (!status) return <span className="text-xs text-[var(--color-neutral)]">—</span>;
+  const cfg: Record<NonNullable<DmFileInfo['db_status']>, { cls: string; label: string }> = {
+    ok:      { cls: 'bg-green-100 text-green-700',  label: 'ok' },
+    pending: { cls: 'bg-yellow-100 text-yellow-700',label: 'pending' },
+    error:   { cls: 'bg-red-100 text-red-700',      label: 'error' },
+  };
+  const { cls, label } = cfg[status];
+  return (
+    <span className={cn('inline-block rounded px-2 py-0.5 text-xs font-medium', cls)}>
+      {label}
+    </span>
+  );
+}
+
+// ─── Source section ───────────────────────────────────────────────────────────
+
+interface SourceSectionProps {
+  title: string;
+  sourceKey: 'netsuite' | 'salesforce';
+  section: DmSourceSection;
+  showMonth: boolean;
+  scanning: boolean;
+  ingesting: boolean;
+  onScan: () => void;
+  onIngest: () => void;
+}
+
+function SourceSection({
+  title,
+  section,
+  showMonth,
+  scanning,
+  ingesting,
+  onScan,
+  onIngest,
+}: SourceSectionProps) {
+  const busy = scanning || ingesting;
+  const needsAction = section.files.some(
+    (f) => f.scan_status === 'new' || f.scan_status === 'updated'
+  );
+
+  return (
+    <section className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+      {/* Section header */}
+      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-gray-100 bg-[var(--color-band)]">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-gray-900">{title}</span>
+            <span className="text-xs text-[var(--color-neutral)]">
+              {section.total_rows.toLocaleString()} rows in DB
+            </span>
+          </div>
+          <p className="mt-0.5 text-xs font-mono text-gray-400 truncate max-w-[420px]">
+            {section.folder_path}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={onIngest}
+            disabled={busy || !needsAction}
+            className={cn(
+              'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+              'bg-[var(--color-primary)] text-white',
+              (busy || !needsAction)
+                ? 'opacity-40 cursor-not-allowed'
+                : 'hover:opacity-90'
+            )}
+          >
+            {ingesting ? 'Ingesting…' : 'Ingest Files'}
+          </button>
+          <button
+            onClick={onScan}
+            disabled={busy}
+            className={cn(
+              'rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors',
+              busy ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-50'
+            )}
+          >
+            {scanning ? 'Scanning…' : 'Scan'}
+          </button>
+        </div>
+      </div>
+
+      {/* File table */}
+      {section.files.length === 0 ? (
+        <p className="px-5 py-8 text-center text-sm text-[var(--color-neutral)]">
+          No files found in this folder.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 text-xs font-semibold uppercase tracking-wide text-[var(--color-neutral)]">
+                <th className="px-5 py-3 text-left">File</th>
+                {showMonth && <th className="px-4 py-3 text-left">Month</th>}
+                <th className="px-4 py-3 text-left">Scan</th>
+                <th className="px-4 py-3 text-right">DB Rows</th>
+                <th className="px-4 py-3 text-left">DB Status</th>
+                <th className="px-5 py-3 text-left">Ingested</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {section.files.map((file) => (
+                <tr
+                  key={file.file_path}
+                  className={cn(
+                    'hover:bg-[var(--color-band)]',
+                    file.scan_status === 'not_synced' && 'opacity-60'
+                  )}
+                >
+                  <td className="px-5 py-2.5 font-mono text-xs text-[var(--color-primary)] max-w-[260px] truncate">
+                    {file.filename}
+                  </td>
+                  {showMonth && (
+                    <td className="px-4 py-2.5 text-sm text-[var(--color-neutral)] whitespace-nowrap">
+                      {file.month_key ? formatMonthShort(file.month_key) : '—'}
+                    </td>
+                  )}
+                  <td className="px-4 py-2.5">
+                    <ScanBadge status={file.scan_status} />
+                  </td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-sm text-[var(--color-neutral)]">
+                    {file.db_rows !== null ? file.db_rows.toLocaleString() : '—'}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <DbBadge status={file.db_status} />
+                    {file.error && (
+                      <p className="mt-0.5 text-xs text-[var(--color-danger)] leading-tight max-w-[200px] truncate" title={file.error}>
+                        {file.error}
+                      </p>
+                    )}
+                  </td>
+                  <td className="px-5 py-2.5 text-xs text-[var(--color-neutral)] whitespace-nowrap">
+                    {formatTs(file.ingested_at)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Footer */}
+      <div className="border-t border-gray-100 px-5 py-3 text-xs text-[var(--color-neutral)]">
+        Click <strong>Ingest Files</strong> to load new or updated files into the database.
+        Only files marked <em>new</em> or <em>updated</em> are processed.
+      </div>
+    </section>
+  );
+}
+
+// ─── Ingest result toast ──────────────────────────────────────────────────────
+
+interface IngestResult {
   source: string;
-  new_files: number;
-  updated_files: number;
-  unchanged_files: number;
-  invalid_files: number;
-  files: { path: string; status: string }[];
-}
-
-interface IngestSourceResult {
-  source: string;
+  label: string;
   rows_ingested: number;
   files_processed: number;
   errors: string[];
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function formatTs(iso: string | null): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString('en-US', {
-    month: 'short', day: 'numeric', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  });
-}
-
-function basename(filePath: string): string {
-  return filePath.split(/[\\/]/).pop() ?? filePath;
-}
-
-function Pill({ color, children }: { color: string; children: React.ReactNode }) {
+function IngestToast({ results, onDismiss }: { results: IngestResult[]; onDismiss: () => void }) {
+  const hasErrors = results.some((r) => r.errors.length > 0);
   return (
-    <span className={cn('inline-block rounded px-2 py-0.5 text-xs font-medium', color)}>
-      {children}
-    </span>
-  );
-}
-
-const STATUS_PILL: Record<string, string> = {
-  new: 'bg-blue-100 text-blue-700',
-  updated: 'bg-amber-100 text-amber-700',
-  unchanged: 'bg-gray-100 text-gray-600',
-  invalid: 'bg-red-100 text-red-700',
-};
-
-// ── Main component ────────────────────────────────────────────────────────────
-
-export function DataManagementClient() {
-  const [status, setStatus] = useState<StatusData | null>(null);
-  const [history, setHistory] = useState<HistoryRow[]>([]);
-  const [loadingStatus, setLoadingStatus] = useState(true);
-  const [loadingHistory, setLoadingHistory] = useState(true);
-
-  const [previewing, setPreviewing] = useState(false);
-  const [ingesting, setIngesting] = useState(false);
-  const [previewResults, setPreviewResults] = useState<PreviewSourceResult[] | null>(null);
-  const [ingestResults, setIngestResults] = useState<IngestSourceResult[] | null>(null);
-  const [ingestError, setIngestError] = useState<string | null>(null);
-
-  const busy = previewing || ingesting;
-
-  const fetchStatus = useCallback(() => {
-    setLoadingStatus(true);
-    fetch('/api/data-management')
-      .then((r) => r.json())
-      .then((data: StatusData) => setStatus(data))
-      .finally(() => setLoadingStatus(false));
-  }, []);
-
-  const fetchHistory = useCallback(() => {
-    setLoadingHistory(true);
-    fetch('/api/ingest/status')
-      .then((r) => r.json())
-      .then((data: { rows: HistoryRow[] }) => setHistory(data.rows ?? []))
-      .finally(() => setLoadingHistory(false));
-  }, []);
-
-  useEffect(() => {
-    fetchStatus();
-    fetchHistory();
-  }, [fetchStatus, fetchHistory]);
-
-  async function handlePreview() {
-    setPreviewing(true);
-    setPreviewResults(null);
-    setIngestResults(null);
-    setIngestError(null);
-    try {
-      const res = await fetch('/api/ingest/preview', { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Preview failed');
-      setPreviewResults(data.results);
-    } catch (err) {
-      setIngestError((err as Error).message);
-    } finally {
-      setPreviewing(false);
-    }
-  }
-
-  async function handleIngest() {
-    setIngesting(true);
-    setIngestResults(null);
-    setIngestError(null);
-    try {
-      const res = await fetch('/api/ingest', { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Ingest failed');
-      setIngestResults(data.results);
-      fetchStatus();
-      fetchHistory();
-    } catch (err) {
-      setIngestError((err as Error).message);
-    } finally {
-      setIngesting(false);
-    }
-  }
-
-  return (
-    <div className="space-y-8">
-      <h1 className="text-xl font-bold text-[var(--color-primary)]">Data Management</h1>
-
-      {/* ── Data Status ──────────────────────────────────────────────────── */}
-      <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--color-neutral)]">
-          Data Status
-        </h2>
-        {loadingStatus ? (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="h-20 animate-pulse rounded-lg bg-gray-100" />
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <StatCard label="Latest Month" value={status?.latest_month ? formatMonth(status.latest_month) : '—'} />
-            <StatCard label="Spend Rows" value={status?.spend_rows?.toLocaleString() ?? '—'} />
-            <StatCard label="Leads Rows" value={status?.leads_rows?.toLocaleString() ?? '—'} />
-            <StatCard label="Last Ingested" value={status?.last_ingested_at ? formatTs(status.last_ingested_at) : '—'} small />
-          </div>
-        )}
-      </section>
-
-      {/* ── Ingest Controls ──────────────────────────────────────────────── */}
-      <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--color-neutral)]">
-          Ingest Controls
-        </h2>
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="flex flex-wrap gap-3">
-            <button
-              onClick={handlePreview}
-              disabled={busy}
-              className={cn(
-                'rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-[var(--color-primary)] shadow-sm transition-colors',
-                busy ? 'cursor-not-allowed opacity-50' : 'hover:bg-[var(--color-band)]'
-              )}
-            >
-              {previewing ? 'Scanning…' : 'Preview Changes'}
-            </button>
-            <button
-              onClick={handleIngest}
-              disabled={busy}
-              className={cn(
-                'rounded-md bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors',
-                busy ? 'cursor-not-allowed opacity-50' : 'hover:opacity-90'
-              )}
-            >
-              {ingesting ? 'Running…' : 'Run Ingest'}
-            </button>
-          </div>
-
-          {/* Error */}
-          {ingestError && (
-            <div className="mt-4 rounded-md bg-red-50 px-4 py-3 text-sm text-[var(--color-danger)]">
-              {ingestError}
-            </div>
-          )}
-
-          {/* Preview results */}
-          {previewResults && (
-            <div className="mt-5 space-y-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-neutral)]">
-                Preview — no changes written
+    <div className={cn(
+      'rounded-lg border px-5 py-4 text-sm',
+      hasErrors
+        ? 'border-red-200 bg-red-50'
+        : 'border-green-200 bg-green-50'
+    )}>
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-2">
+          {results.map((r) => (
+            <div key={r.source}>
+              <p className={cn('font-medium', hasErrors ? 'text-red-800' : 'text-green-800')}>
+                {r.label}: {r.files_processed} file{r.files_processed !== 1 ? 's' : ''} processed
+                &nbsp;·&nbsp;{r.rows_ingested.toLocaleString()} rows ingested
               </p>
-              {previewResults.map((src) => (
-                <div key={src.source}>
-                  <p className="mb-2 text-sm font-medium text-[var(--color-primary)]">{src.source}</p>
-                  <div className="flex flex-wrap gap-2 text-sm">
-                    <Pill color="bg-blue-100 text-blue-700">{src.new_files} new</Pill>
-                    <Pill color="bg-amber-100 text-amber-700">{src.updated_files} updated</Pill>
-                    <Pill color="bg-gray-100 text-gray-600">{src.unchanged_files} unchanged</Pill>
-                    {src.invalid_files > 0 && (
-                      <Pill color="bg-red-100 text-red-700">{src.invalid_files} invalid</Pill>
-                    )}
-                  </div>
-                  {src.files.length > 0 && (
-                    <ul className="mt-2 space-y-0.5">
-                      {src.files.map((f) => (
-                        <li key={f.path} className="flex items-center gap-2 text-xs text-[var(--color-neutral)]">
-                          <span className={cn('inline-block rounded px-1.5 py-0.5 font-medium', STATUS_PILL[f.status] ?? 'bg-gray-100')}>
-                            {f.status}
-                          </span>
-                          <span className="font-mono">{basename(f.path)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
+              {r.errors.map((e, i) => (
+                <p key={i} className="text-xs text-[var(--color-danger)]">✗ {e}</p>
               ))}
             </div>
-          )}
-
-          {/* Ingest results */}
-          {ingestResults && (
-            <div className="mt-5 space-y-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-neutral)]">
-                Ingest Complete
-              </p>
-              {ingestResults.map((src) => (
-                <div key={src.source}>
-                  <p className="mb-1 text-sm font-medium text-[var(--color-primary)]">{src.source}</p>
-                  <p className="text-sm text-[var(--color-neutral)]">
-                    {src.files_processed} files processed · {src.rows_ingested.toLocaleString()} rows ingested
-                  </p>
-                  {src.errors.length > 0 && (
-                    <ul className="mt-1 space-y-0.5">
-                      {src.errors.map((e, i) => (
-                        <li key={i} className="text-xs text-[var(--color-danger)]">✗ {e}</li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+          ))}
         </div>
-      </section>
-
-      {/* ── Ingest History ───────────────────────────────────────────────── */}
-      <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--color-neutral)]">
-          Ingest History
-        </h2>
-        <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
-          {loadingHistory ? (
-            <div className="h-48 animate-pulse rounded-lg bg-gray-50" />
-          ) : history.length === 0 ? (
-            <p className="px-5 py-8 text-center text-sm text-[var(--color-neutral)]">
-              No files ingested yet. Run ingest to populate data.
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-[var(--color-band)] text-xs font-semibold uppercase tracking-wide text-[var(--color-neutral)]">
-                  <tr>
-                    <th className="px-5 py-3 text-left">File</th>
-                    <th className="px-5 py-3 text-left">Source</th>
-                    <th className="px-5 py-3 text-right">Rows</th>
-                    <th className="px-5 py-3 text-left">Ingested At</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {history.map((row, i) => (
-                    <tr key={i} className="hover:bg-[var(--color-band)]">
-                      <td className="px-5 py-3 font-mono text-xs text-[var(--color-primary)]">
-                        {basename(row.file_path)}
-                      </td>
-                      <td className="px-5 py-3 text-[var(--color-neutral)]">{row.source_name}</td>
-                      <td className="px-5 py-3 text-right tabular-nums text-[var(--color-primary)]">
-                        {row.row_count?.toLocaleString() ?? '—'}
-                      </td>
-                      <td className="px-5 py-3 text-[var(--color-neutral)]">
-                        {formatTs(row.ingested_at)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </section>
+        <button
+          onClick={onDismiss}
+          className="text-gray-400 hover:text-gray-600 text-lg leading-none flex-shrink-0"
+          aria-label="Dismiss"
+        >
+          ×
+        </button>
+      </div>
     </div>
   );
 }
 
-// ── StatCard ──────────────────────────────────────────────────────────────────
+// ─── Main component ───────────────────────────────────────────────────────────
 
-function StatCard({ label, value, small = false }: { label: string; value: string; small?: boolean }) {
+export function DataManagementClient() {
+  const [data, setData] = useState<DataManagementResponse | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [ingestingSource, setIngestingSource] = useState<string | null>(null);
+  const [ingestResults, setIngestResults] = useState<IngestResult[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // ── Scan (fetch data-management which runs the filesystem scan) ────────────
+  const scan = useCallback(async () => {
+    setScanning(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/data-management');
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Scan failed');
+      setData(json);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setScanning(false);
+    }
+  }, []);
+
+  // Auto-scan on mount
+  useEffect(() => { scan(); }, [scan]);
+
+  // ── Ingest ─────────────────────────────────────────────────────────────────
+  const ingest = useCallback(async (source?: string) => {
+    const key = source ?? 'all';
+    setIngestingSource(key);
+    setIngestResults(null);
+    setError(null);
+    try {
+      const url = source ? `/api/ingest?source=${source}` : '/api/ingest';
+      const res = await fetch(url, { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Ingest failed');
+      setIngestResults(json.results ?? []);
+      // Re-scan to reflect new DB state
+      await scan();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setIngestingSource(null);
+    }
+  }, [scan]);
+
+  const busy = scanning || ingestingSource !== null;
+
+  // ─── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-      <p className="text-sm font-medium text-[var(--color-neutral)]">{label}</p>
-      <p className={cn('mt-1 font-bold text-[var(--color-primary)]', small ? 'text-base' : 'text-2xl')}>
-        {value}
-      </p>
+    <div className="space-y-6">
+      {/* Top bar */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-[var(--color-primary)]">Data Management</h1>
+          <p className="mt-1 text-sm text-[var(--color-neutral)]">
+            Last full scan:{' '}
+            <span className="font-medium">{formatTs(data?.last_scan_at ?? null)}</span>
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={scan}
+            disabled={busy}
+            className={cn(
+              'rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors',
+              busy ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-50'
+            )}
+          >
+            {scanning ? 'Scanning…' : 'Scan All'}
+          </button>
+          <button
+            onClick={() => ingest()}
+            disabled={busy}
+            className={cn(
+              'rounded-md px-4 py-2 text-sm font-medium text-white transition-colors',
+              'bg-[var(--color-primary)]',
+              busy ? 'opacity-40 cursor-not-allowed' : 'hover:opacity-90'
+            )}
+          >
+            {ingestingSource === 'all' ? 'Ingesting…' : 'Ingest All'}
+          </button>
+        </div>
+      </div>
+
+      {/* Error banner */}
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-5 py-4 text-sm text-[var(--color-danger)]">
+          {error}
+        </div>
+      )}
+
+      {/* Ingest results */}
+      {ingestResults && (
+        <IngestToast results={ingestResults} onDismiss={() => setIngestResults(null)} />
+      )}
+
+      {/* Loading skeleton */}
+      {scanning && !data && (
+        <div className="space-y-4">
+          {[1, 2].map((i) => (
+            <div key={i} className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-100 bg-[var(--color-band)]">
+                <div className="h-5 w-32 animate-pulse rounded bg-gray-200" />
+                <div className="mt-1.5 h-3 w-64 animate-pulse rounded bg-gray-100" />
+              </div>
+              <div className="divide-y divide-gray-50">
+                {Array.from({ length: 4 }).map((_, j) => (
+                  <div key={j} className="flex gap-4 px-5 py-2.5">
+                    {Array.from({ length: 5 }).map((_, k) => (
+                      <div key={k} className="h-4 flex-1 animate-pulse rounded bg-gray-100" />
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* NetSuite section */}
+      {data && (
+        <SourceSection
+          title="NetSuite"
+          sourceKey="netsuite"
+          section={data.netsuite}
+          showMonth={true}
+          scanning={scanning}
+          ingesting={ingestingSource === 'netsuite'}
+          onScan={scan}
+          onIngest={() => ingest('netsuite')}
+        />
+      )}
+
+      {/* Salesforce section */}
+      {data && (
+        <SourceSection
+          title="Salesforce"
+          sourceKey="salesforce"
+          section={data.salesforce}
+          showMonth={false}
+          scanning={scanning}
+          ingesting={ingestingSource === 'salesforce'}
+          onScan={scan}
+          onIngest={() => ingest('salesforce')}
+        />
+      )}
     </div>
   );
 }

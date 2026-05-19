@@ -7,8 +7,7 @@ import { cn } from '@/lib/cn';
 const TABS = [
   { label: 'Budget vs Actual', href: '/budget-vs-actual' },
   { label: 'Pipeline', href: '/salesforce' },
-  { label: 'Channel Breakdown', href: '/channel-breakdown' },
-  { label: 'Channel Detail', href: '/channel-detail' },
+  { label: 'Channel Costs', href: '/channel-costs' },
   { label: 'Vendor Classification', href: '/vendor-classifications' },
   { label: 'Data Management', href: '/data-management' },
 ] as const;

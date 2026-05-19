@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ rows, years } satisfies ChannelDetailResponse);
   } catch (err) {
-    console.error('[api/channel-detail]', err);
+    console.error('[api/channel-costs]', err);
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 }

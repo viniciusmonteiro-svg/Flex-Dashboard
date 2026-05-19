@@ -13,11 +13,15 @@ export async function POST() {
         const files = await scanSource(source);
         return {
           source: source.name,
+          label: source.label,
           new_files: files.filter((f) => f.status === 'new').length,
           updated_files: files.filter((f) => f.status === 'updated').length,
           unchanged_files: files.filter((f) => f.status === 'unchanged').length,
-          invalid_files: files.filter((f) => f.status === 'invalid').length,
-          files: files.map((f) => ({ path: f.path, status: f.status })),
+          files: files.map((f) => ({
+            filename: f.fileName,
+            status: f.status,
+            month_key: f.monthKey,
+          })),
         };
       })
     );
