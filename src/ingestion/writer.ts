@@ -106,7 +106,7 @@ export async function upsertOpportunities(rows: SalesforceRow[]): Promise<void> 
         (opportunity_id, opportunity_name, account_name, created_date, close_date,
          stage, monthly_mrr, number_of_locations, primary_channel,
          primary_campaign_source, lead_source, opportunity_owner, opp_type,
-         created_month, ingested_at)
+         created_month)
       VALUES ${values}
       ON CONFLICT (opportunity_id) DO UPDATE SET
         stage                   = EXCLUDED.stage,
