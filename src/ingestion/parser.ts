@@ -7,7 +7,11 @@ import type { SourceDefinition, NetsuiteRow, MarketingLeadsRow } from './types';
 type AnyRow = NetsuiteRow | MarketingLeadsRow;
 
 function parseXlsx(filePath: string, headerRowIndex: number): Record<string, string>[] {
-  const workbook = XLSX.readFile(filePath);
+  // Read into a buffer first — XLSX.readFile() can fail on Windows shortcut/UNC
+  // paths (e.g. G:\.shortcut-targets-by-id\...). Using fs.readFileSync + XLSX.read
+  // hands raw bytes directly to the parser and avoids that path-handling bug.
+  const buffer = fs.readFileSync(filePath);
+  const workbook = XLSX.read(buffer, { type: 'buffer' });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   return XLSX.utils.sheet_to_json<Record<string, string>>(sheet, {
     range: headerRowIndex,
