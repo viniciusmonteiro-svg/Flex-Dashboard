@@ -8,9 +8,9 @@ dist/
 
 # Environment files (never commit real values)
 .env.local
-.env.*.local
+.env*.local
 
-# Data ingested locally (Phase 2+)
+# Data ingested locally
 data/
 
 # OS artifacts
@@ -20,3 +20,20 @@ Thumbs.db
 # Editor
 .vscode/
 *.swp
+
+# Claude Code
+.claude/
+
+# Clerk
+/.clerk/
+
+# Vercel
+.vercel
+
+# TypeScript build info
+*.tsbuildinfo
+next-env.d.ts
+
+# Sync state (Drive integration)
+.sync-browser-state.json
+.sync-token.json
