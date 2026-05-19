@@ -31,15 +31,19 @@ async function classifyFile(
   const fileMtime = stat.mtime;
   const fileSizeBytes = stat.size;
 
-  const record = await queryOne<{ file_mtime: string | null }>(
-    'SELECT file_mtime FROM ingested_files WHERE file_path = $1',
+  const record = await queryOne<{ file_mtime: string | null; status: string | null }>(
+    'SELECT file_mtime, status FROM ingested_files WHERE file_path = $1',
     [filePath]
   );
 
   let status: ClassifiedFile['status'];
   if (!record) {
     status = 'new';
-  } else if (!record.file_mtime || fileMtime > new Date(record.file_mtime)) {
+  } else if (
+    record.status === 'error' ||          // always retry errored files
+    !record.file_mtime ||
+    fileMtime > new Date(record.file_mtime)
+  ) {
     status = 'updated';
   } else {
     status = 'unchanged';
