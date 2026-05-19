@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { formatPercent, formatMonthShort } from '@/lib/format';
+import { formatPercent, formatMonthShort, formatMonth } from '@/lib/format';
 import type { CohortResponse, ChannelCohort, CohortCell } from '@/app/api/salesforce/channels/route';
 import type { CampaignRow } from '@/app/api/salesforce/campaigns/route';
 
@@ -17,14 +17,13 @@ const TEXT_MUTED   = '#64748b';
 const TEAL         = '#14b8a6';
 
 type Metric = 'created' | 'won' | 'winrate';
-type View   = 'monthly' | 'quarterly';
+type View   = 'monthly' | 'quarterly' | 'yearly';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 function cellValue(cell: CohortCell, metric: Metric): number {
   if (metric === 'created')  return cell.created;
   if (metric === 'won')      return cell.won;
-  // win rate
   return cell.created > 0 ? (cell.won / cell.created) * 100 : 0;
 }
 
@@ -35,10 +34,21 @@ function fmtCell(val: number, metric: Metric): string {
 }
 
 function rowTotal(ch: ChannelCohort, metric: Metric): number {
+  if (metric === 'winrate') {
+    // weighted average win rate
+    const totalCreated = ch.values.reduce((s, c) => s + c.created, 0);
+    const totalWon     = ch.values.reduce((s, c) => s + c.won, 0);
+    return totalCreated > 0 ? (totalWon / totalCreated) * 100 : 0;
+  }
   return ch.values.reduce((s, c) => s + cellValue(c, metric), 0);
 }
 
-function totalRow(totals: CohortCell[], metric: Metric): number {
+function totalRowValue(totals: CohortCell[], metric: Metric): number {
+  if (metric === 'winrate') {
+    const tc = totals.reduce((s, c) => s + c.created, 0);
+    const tw = totals.reduce((s, c) => s + c.won, 0);
+    return tc > 0 ? (tw / tc) * 100 : 0;
+  }
   return totals.reduce((s, c) => s + cellValue(c, metric), 0);
 }
 
@@ -105,15 +115,10 @@ function PivotTable({ periods, channels, totals, metric, loading }: PivotTablePr
   const scrollRef = useRef<HTMLDivElement>(null);
 
   return (
-    <div
-      ref={scrollRef}
-      className="overflow-x-auto"
-      style={{ background: CARD_BG }}
-    >
+    <div ref={scrollRef} className="overflow-x-auto" style={{ background: CARD_BG }}>
       <table className="w-full text-xs" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
         <thead>
           <tr>
-            {/* sticky channel column header */}
             <th
               className="sticky left-0 z-10 px-4 py-2.5 text-left font-semibold"
               style={{
@@ -176,7 +181,6 @@ function PivotTable({ periods, channels, totals, metric, loading }: PivotTablePr
                     className="group"
                     style={{ borderBottom: `1px solid ${CARD_BORDER}` }}
                   >
-                    {/* sticky channel cell */}
                     <td
                       className="sticky left-0 px-4 py-2 font-medium"
                       style={{ background: CARD_BG, color: TEXT_PRIMARY, minWidth: 180 }}
@@ -234,7 +238,7 @@ function PivotTable({ periods, channels, totals, metric, loading }: PivotTablePr
                   className="px-4 py-2.5 text-right tabular-nums font-bold"
                   style={{ color: TEXT_PRIMARY }}
                 >
-                  {fmtCell(totalRow(totals, metric), metric) || '—'}
+                  {fmtCell(totalRowValue(totals, metric), metric) || '—'}
                 </td>
               </tr>
             </>
@@ -245,31 +249,93 @@ function PivotTable({ periods, channels, totals, metric, loading }: PivotTablePr
   );
 }
 
+// ─── dark-styled select ───────────────────────────────────────────────────────
+
+function DarkSelect({
+  value,
+  onChange,
+  disabled,
+  children,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={disabled}
+      className="rounded-md px-3 py-1.5 text-xs focus:outline-none transition-opacity"
+      style={{
+        background: CARD_BG,
+        border: `1px solid ${CARD_BORDER}`,
+        color: disabled ? TEXT_MUTED : TEXT_PRIMARY,
+        opacity: disabled ? 0.5 : 1,
+        cursor: disabled ? 'not-allowed' : 'default',
+      }}
+    >
+      {children}
+    </select>
+  );
+}
+
 // ─── main component ───────────────────────────────────────────────────────────
 
 export default function SalesforceClient() {
-  const [view, setView]     = useState<View>('monthly');
-  const [metric, setMetric] = useState<Metric>('created');
+  // ── Cohort filter state ────────────────────────────────────────────────────
+  const [view,     setView]     = useState<View>('monthly');
+  const [year,     setYear]     = useState('all');
+  const [monthKey, setMonthKey] = useState('all');
+  const [metric,   setMetric]   = useState<Metric>('created');
 
-  const [cohort, setCohort]       = useState<CohortResponse | null>(null);
+  // ── Reference data ─────────────────────────────────────────────────────────
+  const [years,  setYears]  = useState<string[]>([]);
+  const [months, setMonths] = useState<string[]>([]);
+
+  // ── Cohort data ────────────────────────────────────────────────────────────
+  const [cohort,       setCohort]       = useState<CohortResponse | null>(null);
   const [loadingCohort, setLoadingCohort] = useState(true);
 
-  // Campaign section
-  const [months, setMonths]               = useState<string[]>([]);
-  const [campaignMonth, setCampaignMonth] = useState('all');
+  // ── Campaign section state ─────────────────────────────────────────────────
+  const [campaignMonth,   setCampaignMonth]   = useState('all');
   const [campaignChannel, setCampaignChannel] = useState('all');
-  const [campaignData, setCampaignData]   = useState<CampaignRow[]>([]);
+  const [campaignData,    setCampaignData]    = useState<CampaignRow[]>([]);
   const [loadingCampaigns, setLoadingCampaigns] = useState(true);
 
-  // Collapsible section state
+  // ── Collapsible section state ──────────────────────────────────────────────
   const [wonOpen,     setWonOpen]     = useState(true);
   const [winrateOpen, setWinrateOpen] = useState(false);
 
-  // ── fetch cohort data ──────────────────────────────────────────────────────
-  const fetchCohort = useCallback(async (v: View) => {
+  // ── Derived ────────────────────────────────────────────────────────────────
+  const isSpecificMonth = monthKey !== 'all';
+  const hasFilter = year !== 'all' || monthKey !== 'all';
+
+  const showingLabel = useMemo(() => {
+    if (!isSpecificMonth) return null;
+    return formatMonth(monthKey);
+  }, [isSpecificMonth, monthKey]);
+
+  // ── Fetch reference data on mount ─────────────────────────────────────────
+  useEffect(() => {
+    fetch('/api/salesforce/years')
+      .then((r) => r.json())
+      .then((d) => setYears(d.years ?? []));
+
+    fetch('/api/salesforce/months')
+      .then((r) => r.json())
+      .then((d) => setMonths(d.months ?? []));
+  }, []);
+
+  // ── Fetch cohort ───────────────────────────────────────────────────────────
+  const fetchCohort = useCallback(async (v: View, y: string, mk: string) => {
     setLoadingCohort(true);
     try {
-      const res = await fetch(`/api/salesforce/channels?view=${v}`);
+      const params = new URLSearchParams({ view: v });
+      if (mk !== 'all') params.set('month_key', mk);
+      else if (y !== 'all') params.set('year', y);
+      const res = await fetch(`/api/salesforce/channels?${params}`);
       const d: CohortResponse = await res.json();
       setCohort(d);
     } finally {
@@ -277,15 +343,30 @@ export default function SalesforceClient() {
     }
   }, []);
 
-  useEffect(() => { fetchCohort(view); }, [view, fetchCohort]);
+  useEffect(() => { fetchCohort(view, year, monthKey); }, [view, year, monthKey, fetchCohort]);
 
-  // ── fetch months + campaigns ───────────────────────────────────────────────
-  useEffect(() => {
-    fetch('/api/salesforce/months')
-      .then((r) => r.json())
-      .then((d) => setMonths(d.months ?? []));
-  }, []);
+  // ── Filter handlers ────────────────────────────────────────────────────────
+  const handleViewChange = (v: View) => {
+    setView(v);
+    setMonthKey('all'); // reset month when view changes
+  };
 
+  const handleYearChange = (y: string) => {
+    setYear(y);
+    setMonthKey('all'); // reset month when year changes
+  };
+
+  const handleMonthKeyChange = (mk: string) => {
+    setMonthKey(mk);
+    // year becomes irrelevant when a specific month is selected
+  };
+
+  const resetFilters = () => {
+    setYear('all');
+    setMonthKey('all');
+  };
+
+  // ── Fetch campaigns ────────────────────────────────────────────────────────
   const fetchCampaigns = useCallback(async (month: string, channel: string) => {
     setLoadingCampaigns(true);
     try {
@@ -303,7 +384,7 @@ export default function SalesforceClient() {
     fetchCampaigns(campaignMonth, campaignChannel);
   }, [campaignMonth, campaignChannel, fetchCampaigns]);
 
-  // ── campaign pivot ─────────────────────────────────────────────────────────
+  // ── Campaign pivot ─────────────────────────────────────────────────────────
   const { pivotMonths, pivotSources, pivotMap } = useMemo(() => {
     const monthSet  = new Set<string>();
     const sourceSet = new Set<string>();
@@ -336,14 +417,24 @@ export default function SalesforceClient() {
 
   // ─── render ───────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen px-6 py-8 space-y-8" style={{ background: DARK_BG, color: TEXT_PRIMARY }}>
+    <div className="min-h-screen px-6 py-8 space-y-6" style={{ background: DARK_BG, color: TEXT_PRIMARY }}>
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: TEXT_PRIMARY }}>
-            Pipeline Cohort
-          </h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold" style={{ color: TEXT_PRIMARY }}>
+              Pipeline Cohort
+            </h1>
+            {showingLabel && (
+              <span
+                className="text-xs font-medium px-2.5 py-1 rounded-full"
+                style={{ background: `${TEAL}22`, color: TEAL, border: `1px solid ${TEAL}44` }}
+              >
+                Showing: {showingLabel}
+              </span>
+            )}
+          </div>
           <p className="mt-1 text-sm max-w-lg" style={{ color: TEXT_MUTED }}>
             Each column = opportunities created in that period;
             Won / Lost / Open figures show current outcome to-date.{' '}
@@ -351,30 +442,80 @@ export default function SalesforceClient() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <ToggleGroup<Metric>
-            options={[
-              { label: 'Opps Created', value: 'created' },
-              { label: 'Closed Won',   value: 'won'     },
-              { label: 'Win Rate',     value: 'winrate' },
-            ]}
-            value={metric}
-            onChange={setMetric}
-          />
-          <ToggleGroup<View>
-            options={[
-              { label: 'Monthly',   value: 'monthly'   },
-              { label: 'Quarterly', value: 'quarterly' },
-            ]}
-            value={view}
-            onChange={setView}
-          />
-        </div>
+        {/* Metric toggle — top right */}
+        <ToggleGroup<Metric>
+          options={[
+            { label: 'Opps Created', value: 'created' },
+            { label: 'Closed Won',   value: 'won'     },
+            { label: 'Win Rate',     value: 'winrate' },
+          ]}
+          value={metric}
+          onChange={setMetric}
+        />
+      </div>
+
+      {/* ── Filter row ──────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-3">
+        {/* View toggle */}
+        <ToggleGroup<View>
+          options={[
+            { label: 'Monthly',   value: 'monthly'   },
+            { label: 'Quarterly', value: 'quarterly' },
+            { label: 'Yearly',    value: 'yearly'    },
+          ]}
+          value={view}
+          onChange={handleViewChange}
+        />
+
+        {/* Year filter */}
+        <DarkSelect
+          value={year}
+          onChange={handleYearChange}
+          disabled={isSpecificMonth}
+        >
+          <option value="all">All Years</option>
+          {years.map((y) => (
+            <option key={y} value={y}>{y}</option>
+          ))}
+        </DarkSelect>
+
+        {/* Month filter — only in monthly view */}
+        {view === 'monthly' && (
+          <DarkSelect
+            value={monthKey}
+            onChange={handleMonthKeyChange}
+          >
+            <option value="all">All Months</option>
+            {months.map((m) => (
+              <option key={m} value={m}>{formatMonthShort(m)}</option>
+            ))}
+          </DarkSelect>
+        )}
+
+        {/* Reset filters */}
+        {hasFilter && (
+          <button
+            onClick={resetFilters}
+            className="text-xs px-3 py-1.5 rounded-full transition-colors"
+            style={{
+              color: TEXT_MUTED,
+              border: `1px solid ${CARD_BORDER}`,
+              background: 'transparent',
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.color = TEXT_PRIMARY;
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.color = TEXT_MUTED;
+            }}
+          >
+            × Reset
+          </button>
+        )}
       </div>
 
       {/* ── Main cohort table ────────────────────────────────────────────── */}
       <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${CARD_BORDER}` }}>
-        {/* Section header */}
         <div
           className="px-4 py-2.5 text-sm font-bold"
           style={{ background: HEADER_BG, color: '#fff' }}
@@ -440,16 +581,11 @@ export default function SalesforceClient() {
             Opportunities by Campaign Source
           </h2>
 
-          {/* Month select */}
           <select
             value={campaignMonth}
             onChange={(e) => setCampaignMonth(e.target.value)}
             className="rounded-md px-3 py-1.5 text-sm focus:outline-none"
-            style={{
-              background: CARD_BG,
-              border: `1px solid ${CARD_BORDER}`,
-              color: TEXT_PRIMARY,
-            }}
+            style={{ background: CARD_BG, border: `1px solid ${CARD_BORDER}`, color: TEXT_PRIMARY }}
           >
             <option value="all">All Months</option>
             {months.map((m) => (
@@ -457,16 +593,11 @@ export default function SalesforceClient() {
             ))}
           </select>
 
-          {/* Channel select */}
           <select
             value={campaignChannel}
             onChange={(e) => setCampaignChannel(e.target.value)}
             className="rounded-md px-3 py-1.5 text-sm focus:outline-none"
-            style={{
-              background: CARD_BG,
-              border: `1px solid ${CARD_BORDER}`,
-              color: TEXT_PRIMARY,
-            }}
+            style={{ background: CARD_BG, border: `1px solid ${CARD_BORDER}`, color: TEXT_PRIMARY }}
           >
             <option value="all">All Channels</option>
             {channelOptions.map((c) => (
