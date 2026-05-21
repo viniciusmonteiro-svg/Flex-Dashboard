@@ -129,6 +129,19 @@ CREATE TABLE IF NOT EXISTS salesforce_opportunities (
   ingested_at              TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS vendor_classification_history (
+  id             SERIAL PRIMARY KEY,
+  financial_row  TEXT NOT NULL,
+  entity_name    TEXT NOT NULL,
+  channel        TEXT NOT NULL,
+  month_key      TEXT NOT NULL,
+  is_preset      BOOLEAN DEFAULT FALSE,
+  manually_set   BOOLEAN DEFAULT FALSE,
+  set_by         TEXT,
+  created_at     TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (financial_row, entity_name, month_key)
+);
+
 CREATE INDEX IF NOT EXISTS idx_netsuite_month         ON netsuite_actuals(month_key);
 CREATE INDEX IF NOT EXISTS idx_netsuite_financial_row ON netsuite_actuals(financial_row);
 CREATE INDEX IF NOT EXISTS idx_netsuite_entity        ON netsuite_actuals(entity_name);
@@ -139,6 +152,28 @@ CREATE INDEX IF NOT EXISTS idx_vendor_class_channel   ON vendor_classifications(
 CREATE INDEX IF NOT EXISTS idx_sf_created_month       ON salesforce_opportunities(created_month);
 CREATE INDEX IF NOT EXISTS idx_sf_channel             ON salesforce_opportunities(primary_channel);
 CREATE INDEX IF NOT EXISTS idx_sf_stage               ON salesforce_opportunities(stage);
+CREATE INDEX IF NOT EXISTS idx_vc_history_month       ON vendor_classification_history(month_key);
+CREATE INDEX IF NOT EXISTS idx_vc_history_entity      ON vendor_classification_history(financial_row, entity_name);
+
+-- Backfill vendor_classification_history from current vendor_classifications.
+-- Idempotent: ON CONFLICT DO NOTHING skips rows that already exist.
+-- Uses LEFT JOIN so vendors with no classification row still get an
+-- 'Unclassified' history entry (INNER JOIN would silently exclude them).
+INSERT INTO vendor_classification_history
+  (financial_row, entity_name, channel, month_key, is_preset, manually_set)
+SELECT DISTINCT
+  n.financial_row,
+  n.entity_name,
+  COALESCE(vc.channel, 'Unclassified') AS channel,
+  n.month_key,
+  COALESCE(vc.is_preset, FALSE),
+  FALSE
+FROM netsuite_actuals n
+LEFT JOIN vendor_classifications vc
+  ON vc.financial_row = n.financial_row
+ AND vc.entity_name   = n.entity_name
+WHERE n.month_key IS NOT NULL
+ON CONFLICT (financial_row, entity_name, month_key) DO NOTHING;
 `;
 
 let initialized = false;
