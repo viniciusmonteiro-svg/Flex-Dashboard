@@ -47,17 +47,50 @@ async function runBatches<T>(
 
 // ─── Upsert functions ─────────────────────────────────────────────────────────
 
+/**
+ * Pre-aggregate NetSuite rows before inserting.
+ *
+ * The same vendor can appear multiple times in one file (separate transactions
+ * for the same month/GL row/entity that NetSuite exports as individual lines).
+ * Inserting them individually would trigger
+ *   "ON CONFLICT DO UPDATE command cannot affect row a second time"
+ * because two rows in the same batch share the same unique key
+ * (month_key, financial_row, entity_name).
+ *
+ * Strategy: group by key, SUM amounts, keep last non-null scalar fields.
+ */
+function aggregateNetsuiteRows(rows: NetsuiteRow[]): NetsuiteRow[] {
+  const map = new Map<string, NetsuiteRow>();
+
+  for (const row of rows) {
+    const key = `${row.month_key}|${row.financial_row}|${row.entity_name}`;
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, { ...row });
+    } else {
+      existing.amount += row.amount;
+      // Keep last non-null value for metadata fields
+      if (row.transaction_date  != null) existing.transaction_date  = row.transaction_date;
+      if (row.accounting_period != null) existing.accounting_period = row.accounting_period;
+      if (row.description       != null) existing.description       = row.description;
+    }
+  }
+
+  return [...map.values()];
+}
+
 // 8 columns per row → batch 500 rows = 4 000 params (well under the 65 535 limit)
 export async function upsertNetsuiteActuals(rows: NetsuiteRow[]): Promise<void> {
+  const deduped = aggregateNetsuiteRows(rows);
   await runBatches(
-    rows,
+    deduped,
     500,
     8,
     (r) => [
       r.source, r.month_key, r.financial_row, r.entity_name, r.amount,
-      r.transaction_date ?? null,
+      r.transaction_date  ?? null,
       r.accounting_period ?? null,
-      r.description ?? null,
+      r.description       ?? null,
     ],
     (values) => `
       INSERT INTO netsuite_actuals

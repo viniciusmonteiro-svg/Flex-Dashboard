@@ -6,7 +6,6 @@ import { cn } from '@/lib/cn';
 import type { ChannelDetailResponse, ChannelDetailRow } from '@/app/api/channel-costs/route';
 
 type View = 'monthly' | 'quarterly' | 'yearly';
-type PeriodType = 'accounting' | 'transaction';
 
 const CHANNEL_ORDER = [
   'Paid Search',
@@ -466,40 +465,27 @@ function GlGroupRows({ gl, channelName, latestIdx }: { gl: GlGroup; channelName:
   );
 }
 
-const PERIOD_TYPE_LABELS: Record<PeriodType, string> = {
-  accounting:  'Accounting Period',
-  transaction: 'Transaction Date',
-};
-
-const PERIOD_TYPE_TOOLTIPS: Record<PeriodType, string> = {
-  accounting:  'Groups spend by the period it was booked in NetSuite',
-  transaction: 'Groups spend by when the transaction actually occurred',
-};
-
 export default function ChannelCostsClient() {
   const [channel, setChannel] = useState('all');
   const [view, setView] = useState<View>('quarterly');
   const [year, setYear] = useState('all');
   const [monthKey, setMonthKey] = useState('all');
   const [months, setMonths] = useState<string[]>([]);
-  const [periodType, setPeriodType] = useState<PeriodType>('accounting');
   const [data, setData] = useState<ChannelDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Re-fetch the months list whenever period type changes, then reset month selector
   useEffect(() => {
-    setMonthKey('all');
-    fetch(`/api/channel-costs/months?period_type=${periodType}`)
+    fetch('/api/channel-costs/months')
       .then((r) => r.json())
       .then((j) => setMonths(j.months ?? []))
       .catch(() => {});
-  }, [periodType]);
+  }, []);
 
   const isSpecificMonth = monthKey !== 'all';
   const effectiveView: View = isSpecificMonth ? 'monthly' : view;
 
-  const fetchData = useCallback(async (ch: string, y: string, mk: string, pt: PeriodType) => {
+  const fetchData = useCallback(async (ch: string, y: string, mk: string) => {
     setLoading(true);
     setError(null);
     try {
@@ -510,7 +496,6 @@ export default function ChannelCostsClient() {
       } else if (y !== 'all') {
         params.set('year', y);
       }
-      params.set('period_type', pt);
       const res = await fetch(`/api/channel-costs?${params}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Failed to load');
@@ -523,8 +508,8 @@ export default function ChannelCostsClient() {
   }, []);
 
   useEffect(() => {
-    fetchData(channel, year, monthKey, periodType);
-  }, [fetchData, channel, year, monthKey, periodType]);
+    fetchData(channel, year, monthKey);
+  }, [fetchData, channel, year, monthKey]);
 
   const handleViewChange = (v: View) => {
     setView(v);
@@ -538,11 +523,6 @@ export default function ChannelCostsClient() {
 
   const handleMonthKeyChange = (mk: string) => {
     setMonthKey(mk);
-  };
-
-  const handlePeriodTypeChange = (pt: PeriodType) => {
-    setPeriodType(pt);
-    // Month selector will reset via the periodType useEffect above
   };
 
   const showingLabel = useMemo(() => {
@@ -615,34 +595,6 @@ export default function ChannelCostsClient() {
               <option key={ch} value={ch}>{ch}</option>
             ))}
           </select>
-
-          {/* Period type toggle */}
-          <div className="flex items-center gap-1.5">
-            <div className="inline-flex rounded-md border border-gray-200 overflow-hidden text-sm">
-              {(['accounting', 'transaction'] as PeriodType[]).map((pt) => (
-                <button
-                  key={pt}
-                  onClick={() => handlePeriodTypeChange(pt)}
-                  title={PERIOD_TYPE_TOOLTIPS[pt]}
-                  className={cn(
-                    'px-3 py-2 transition-colors whitespace-nowrap',
-                    periodType === pt
-                      ? 'bg-[var(--color-primary)] text-white'
-                      : 'bg-white text-gray-600 hover:bg-gray-50'
-                  )}
-                >
-                  {PERIOD_TYPE_LABELS[pt]}
-                </button>
-              ))}
-            </div>
-            <span
-              title={PERIOD_TYPE_TOOLTIPS[periodType]}
-              className="cursor-help select-none text-gray-400 hover:text-gray-600 text-sm"
-              aria-label="Period type info"
-            >
-              ⓘ
-            </span>
-          </div>
 
           {!isSpecificMonth && (
             <div className="inline-flex rounded-md border border-gray-200 overflow-hidden text-sm">

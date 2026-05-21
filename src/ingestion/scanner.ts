@@ -10,8 +10,9 @@ function folderToMonthKey(folder: string): string {
 }
 
 function monthKeyFromFilename(filename: string): string | null {
-  // "CustomBudgetvs.Actual(Dept_VendorLevel)-01.2026.xls" → "2026-01"
-  const match = filename.match(/(\d{2})\.(\d{4})\.[^.]+$/);
+  // Only accept the new format: CurveMonthlyMarketingReport(BF)-MM.YYYY.xls
+  // Old format (CustomBudgetvs.Actual...) returns null → file is silently skipped.
+  const match = filename.match(/\(BF\)-(\d{2})\.(\d{4})\.xls$/i);
   if (!match) return null;
   return `${match[2]}-${match[1]}`;
 }

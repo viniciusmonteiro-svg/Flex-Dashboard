@@ -15,7 +15,7 @@ export interface ChannelDetailRow {
   channel?: string;
   financial_row: string;
   entity_name: string;
-  month_key: string; // the resolved period (accounting or transaction), not always the filename month
+  month_key: string;
   amount: number;
 }
 
@@ -26,37 +26,16 @@ export interface ChannelDetailResponse {
 
 const EXCLUDED = `('Do Not Tag (COGS/Non-S&M)', 'Unclassified')`;
 
-/**
- * Build the SQL expression used to derive the "period" for grouping and filtering.
- *
- * accounting (default): use the NetSuite accounting period column, fall back to
- *   the filename-derived month_key when accounting_period is NULL (e.g. old-format files).
- *
- * transaction: use the calendar month of the transaction date, fall back to
- *   filename month_key when transaction_date is NULL.
- */
-function buildPeriodExpr(periodType: string): string {
-  if (periodType === 'transaction') {
-    return `COALESCE(LEFT(n.transaction_date::text, 7), n.month_key)`;
-  }
-  // Default: 'accounting'
-  return `COALESCE(n.accounting_period, n.month_key)`;
-}
-
 export async function GET(req: NextRequest) {
   try {
     await initDb();
 
     const { searchParams } = new URL(req.url);
-    const channelParam  = searchParams.get('channel')      || 'all';
-    const yearParam     = searchParams.get('year')         || 'all';
-    const monthKeyParam = searchParams.get('month_key')    || null;
-    const periodType    = searchParams.get('period_type')  || 'accounting';
-
+    const channelParam  = searchParams.get('channel')   || 'all';
+    const yearParam     = searchParams.get('year')      || 'all';
+    const monthKeyParam = searchParams.get('month_key') || null;
     const isAllChannels = !channelParam || channelParam === 'all';
     const yearFilter    = yearParam && yearParam !== 'all' ? yearParam : null;
-
-    const PERIOD_EXPR = buildPeriodExpr(periodType);
 
     const params: unknown[] = [];
     const conditions: string[] = [];
@@ -68,14 +47,12 @@ export async function GET(req: NextRequest) {
       conditions.push(`${CHANNEL_EXPR} = $${params.length}`);
     }
 
-    // Filter by period (uses the same PERIOD_EXPR so accounting and transaction modes
-    // each see the correct slice when a specific month or year is selected)
     if (monthKeyParam) {
       params.push(monthKeyParam);
-      conditions.push(`${PERIOD_EXPR} = $${params.length}`);
+      conditions.push(`n.month_key = $${params.length}`);
     } else if (yearFilter) {
       params.push(yearFilter);
-      conditions.push(`LEFT(${PERIOD_EXPR}, 4) = $${params.length}`);
+      conditions.push(`LEFT(n.month_key, 4) = $${params.length}`);
     }
 
     const whereClause  = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -84,13 +61,12 @@ export async function GET(req: NextRequest) {
     const channelOrder  = isAllChannels ? `${CHANNEL_EXPR},` : '';
 
     const rawRows = await query<RawRow>(
-      `SELECT ${channelSelect} n.financial_row, n.entity_name,
-              ${PERIOD_EXPR} AS month_key,
+      `SELECT ${channelSelect} n.financial_row, n.entity_name, n.month_key,
               SUM(n.amount) / 100 AS amount
        FROM netsuite_actuals n
        ${CLASSIFICATION_JOINS}
        ${whereClause}
-       GROUP BY ${channelGroup} n.financial_row, n.entity_name, ${PERIOD_EXPR}
+       GROUP BY ${channelGroup} n.financial_row, n.entity_name, n.month_key
        ORDER BY ${channelOrder} n.financial_row, amount DESC`,
       params
     );
