@@ -6,6 +6,16 @@ import { cn } from '@/lib/cn';
 import type { ChannelDetailResponse, ChannelDetailRow } from '@/app/api/channel-costs/route';
 
 type View = 'monthly' | 'quarterly' | 'yearly';
+type PeriodType = 'accounting' | 'transaction';
+
+const PERIOD_LABELS: Record<PeriodType, string> = {
+  accounting:  'Accounting Period',
+  transaction: 'Transaction Date',
+};
+const PERIOD_TOOLTIPS: Record<PeriodType, string> = {
+  accounting:  'Groups spend by the period it was booked in NetSuite',
+  transaction: 'Groups spend by when the transaction actually occurred',
+};
 
 const CHANNEL_ORDER = [
   'Paid Search',
@@ -471,21 +481,26 @@ export default function ChannelCostsClient() {
   const [year, setYear] = useState('all');
   const [monthKey, setMonthKey] = useState('all');
   const [months, setMonths] = useState<string[]>([]);
+  const [periodType, setPeriodType] = useState<PeriodType>('transaction');
+  const [monthsLoading, setMonthsLoading] = useState(false);
   const [data, setData] = useState<ChannelDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Re-fetch the months list when period type changes; reset the month selector
   useEffect(() => {
-    fetch('/api/channel-costs/months')
+    setMonthsLoading(true);
+    fetch(`/api/channel-costs/months?period_type=${periodType}`)
       .then((r) => r.json())
       .then((j) => setMonths(j.months ?? []))
-      .catch(() => {});
-  }, []);
+      .catch(() => {})
+      .finally(() => setMonthsLoading(false));
+  }, [periodType]);
 
   const isSpecificMonth = monthKey !== 'all';
   const effectiveView: View = isSpecificMonth ? 'monthly' : view;
 
-  const fetchData = useCallback(async (ch: string, y: string, mk: string) => {
+  const fetchData = useCallback(async (ch: string, y: string, mk: string, pt: PeriodType) => {
     setLoading(true);
     setError(null);
     try {
@@ -496,6 +511,7 @@ export default function ChannelCostsClient() {
       } else if (y !== 'all') {
         params.set('year', y);
       }
+      params.set('period_type', pt);
       const res = await fetch(`/api/channel-costs?${params}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Failed to load');
@@ -508,8 +524,8 @@ export default function ChannelCostsClient() {
   }, []);
 
   useEffect(() => {
-    fetchData(channel, year, monthKey);
-  }, [fetchData, channel, year, monthKey]);
+    fetchData(channel, year, monthKey, periodType);
+  }, [fetchData, channel, year, monthKey, periodType]);
 
   const handleViewChange = (v: View) => {
     setView(v);
@@ -523,6 +539,11 @@ export default function ChannelCostsClient() {
 
   const handleMonthKeyChange = (mk: string) => {
     setMonthKey(mk);
+  };
+
+  const handlePeriodTypeChange = (pt: PeriodType) => {
+    setPeriodType(pt);
+    setMonthKey('all'); // reset month selector — periods may differ between modes
   };
 
   const showingLabel = useMemo(() => {
@@ -596,6 +617,33 @@ export default function ChannelCostsClient() {
             ))}
           </select>
 
+          {/* Period type toggle */}
+          <div className="flex items-center gap-1.5">
+            <div className="inline-flex rounded-md border border-[var(--color-neutral)] overflow-hidden text-sm">
+              {(['accounting', 'transaction'] as PeriodType[]).map((pt) => (
+                <button
+                  key={pt}
+                  onClick={() => handlePeriodTypeChange(pt)}
+                  className={cn(
+                    'px-3 py-2 whitespace-nowrap transition-colors',
+                    periodType === pt
+                      ? 'bg-[var(--color-primary)] text-white'
+                      : 'bg-white text-gray-600 hover:bg-gray-50'
+                  )}
+                >
+                  {PERIOD_LABELS[pt]}
+                </button>
+              ))}
+            </div>
+            <span
+              title={PERIOD_TOOLTIPS[periodType]}
+              className="cursor-help select-none text-sm text-gray-400 hover:text-gray-600"
+              aria-label="Period type explanation"
+            >
+              ⓘ
+            </span>
+          </div>
+
           {!isSpecificMonth && (
             <div className="inline-flex rounded-md border border-gray-200 overflow-hidden text-sm">
               {(['monthly', 'quarterly', 'yearly'] as View[]).map((v) => (
@@ -630,16 +678,30 @@ export default function ChannelCostsClient() {
             ))}
           </select>
 
-          <select
-            value={monthKey}
-            onChange={(e) => handleMonthKeyChange(e.target.value)}
-            className="rounded-md border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
-          >
-            <option value="all">All Months</option>
-            {months.map((mk) => (
-              <option key={mk} value={mk}>{formatMonthShort(mk)}</option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              value={monthKey}
+              disabled={monthsLoading}
+              onChange={(e) => handleMonthKeyChange(e.target.value)}
+              className={cn(
+                'rounded-md border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]',
+                monthsLoading && 'opacity-60 cursor-wait'
+              )}
+            >
+              <option value="all">All Months</option>
+              {months.map((mk) => (
+                <option key={mk} value={mk}>{formatMonthShort(mk)}</option>
+              ))}
+            </select>
+            {monthsLoading && (
+              <span className="pointer-events-none absolute inset-y-0 right-6 flex items-center">
+                <svg className="h-3.5 w-3.5 animate-spin text-[var(--color-primary)]" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+              </span>
+            )}
+          </div>
 
           <button
             onClick={exportCsv}

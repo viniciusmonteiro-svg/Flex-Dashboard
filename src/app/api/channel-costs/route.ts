@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { initDb } from '@/db/init';
 import { query } from '@/db/query';
 import { CLASSIFICATION_JOINS, CHANNEL_EXPR } from '@/lib/classifyVendor';
+import { buildPeriodExpr } from '@/lib/periodExpr';
 
 interface RawRow {
   channel?: string;
   financial_row: string;
   entity_name: string;
-  month_key: string;
+  month_key: string; // contains the resolved period, not necessarily the raw filename month
   amount: string;
 }
 
@@ -31,11 +32,18 @@ export async function GET(req: NextRequest) {
     await initDb();
 
     const { searchParams } = new URL(req.url);
-    const channelParam  = searchParams.get('channel')   || 'all';
-    const yearParam     = searchParams.get('year')      || 'all';
-    const monthKeyParam = searchParams.get('month_key') || null;
+    const channelParam  = searchParams.get('channel')      || 'all';
+    const yearParam     = searchParams.get('year')         || 'all';
+    const monthKeyParam = searchParams.get('month_key')    || null;
+    const periodType    = searchParams.get('period_type')  || 'transaction';
+
     const isAllChannels = !channelParam || channelParam === 'all';
     const yearFilter    = yearParam && yearParam !== 'all' ? yearParam : null;
+
+    // The SQL expression that resolves a YYYY-MM period for each row.
+    // All grouping, filtering, and the returned "month_key" use this expression
+    // so the client always works with consistent period labels.
+    const PERIOD = buildPeriodExpr(periodType);
 
     const params: unknown[] = [];
     const conditions: string[] = [];
@@ -47,26 +55,28 @@ export async function GET(req: NextRequest) {
       conditions.push(`${CHANNEL_EXPR} = $${params.length}`);
     }
 
+    // Period-aware filtering: apply the same PERIOD expression to year/month filters
     if (monthKeyParam) {
       params.push(monthKeyParam);
-      conditions.push(`n.month_key = $${params.length}`);
+      conditions.push(`${PERIOD} = $${params.length}`);
     } else if (yearFilter) {
       params.push(yearFilter);
-      conditions.push(`LEFT(n.month_key, 4) = $${params.length}`);
+      conditions.push(`LEFT(${PERIOD}, 4) = $${params.length}`);
     }
 
-    const whereClause  = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const whereClause   = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     const channelSelect = isAllChannels ? `${CHANNEL_EXPR} AS channel,` : '';
     const channelGroup  = isAllChannels ? `${CHANNEL_EXPR},` : '';
     const channelOrder  = isAllChannels ? `${CHANNEL_EXPR},` : '';
 
     const rawRows = await query<RawRow>(
-      `SELECT ${channelSelect} n.financial_row, n.entity_name, n.month_key,
+      `SELECT ${channelSelect} n.financial_row, n.entity_name,
+              ${PERIOD} AS month_key,
               SUM(n.amount) / 100 AS amount
        FROM netsuite_actuals n
        ${CLASSIFICATION_JOINS}
        ${whereClause}
-       GROUP BY ${channelGroup} n.financial_row, n.entity_name, n.month_key
+       GROUP BY ${channelGroup} n.financial_row, n.entity_name, ${PERIOD}
        ORDER BY ${channelOrder} n.financial_row, amount DESC`,
       params
     );

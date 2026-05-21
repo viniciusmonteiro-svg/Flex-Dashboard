@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ months: rows.map((r) => r.period) });
   } catch (err) {
-    console.error('[api/channel-costs/months]', err);
-    return NextResponse.json({ error: 'Failed to fetch months' }, { status: 500 });
+    console.error('[api/vendor-classifications/months]', err);
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 }

@@ -10,6 +10,16 @@ import {
   type SortingState,
 } from '@tanstack/react-table';
 import { formatCurrency, formatDateTime, formatMonthShort } from '@/lib/format';
+import type { PeriodType } from '@/lib/periodExpr';
+
+const PERIOD_LABELS: Record<PeriodType, string> = {
+  accounting:  'Accounting Period',
+  transaction: 'Transaction Date',
+};
+const PERIOD_TOOLTIPS: Record<PeriodType, string> = {
+  accounting:  'Groups spend by the period it was booked in NetSuite',
+  transaction: 'Groups spend by when the transaction actually occurred',
+};
 import type { VendorClassificationRow } from '@/app/api/vendor-classifications/route';
 import { PAIR_CLASSIFICATIONS } from '@/lib/vendorPresets';
 import { ToastContainer, type ToastItem } from '@/components/ui/Toast';
@@ -50,7 +60,8 @@ export default function VendorClassificationsClient() {
   const [filterText, setFilterText] = useState('');
   const [sorting, setSorting] = useState<SortingState>([]);
 
-  // Month selector state
+  // Period type + month selector state
+  const [periodType, setPeriodType] = useState<PeriodType>('transaction');
   const [selectedMonth, setSelectedMonth] = useState<string>('current');
   const [availableMonths, setAvailableMonths] = useState<string[]>([]);
   const [monthLoading, setMonthLoading] = useState(false);
@@ -91,23 +102,29 @@ export default function VendorClassificationsClient() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [hasPending]);
 
-  // Fetch available months from netsuite data
+  // Fetch available months whenever period type changes; reset month selector
   useEffect(() => {
-    fetch('/api/vendor-classifications/months')
+    setMonthLoading(true);
+    setSelectedMonth('current');
+    fetch(`/api/vendor-classifications/months?period_type=${periodType}`)
       .then((r) => r.json())
       .then((d) => { if (d.months) setAvailableMonths(d.months); })
-      .catch(() => {/* non-fatal */});
-  }, []);
+      .catch(() => {/* non-fatal */})
+      .finally(() => setMonthLoading(false));
+  }, [periodType]);
 
-  const fetchRows = useCallback(async (monthKey: string | null = null, isSwitching = false) => {
+  const fetchRows = useCallback(async (
+    monthKey: string | null = null,
+    pt: PeriodType = 'transaction',
+    isSwitching = false
+  ) => {
     if (isSwitching) setMonthLoading(true);
     else setLoading(true);
     setError(null);
     try {
-      const url = monthKey
-        ? `/api/vendor-classifications?month_key=${monthKey}`
-        : '/api/vendor-classifications';
-      const res = await fetch(url);
+      const params = new URLSearchParams({ period_type: pt });
+      if (monthKey) params.set('month_key', monthKey);
+      const res = await fetch(`/api/vendor-classifications?${params}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Failed to load');
       setRows(data.rows);
@@ -126,18 +143,23 @@ export default function VendorClassificationsClient() {
     autoApplied.current = true;
     (async () => {
       await fetch('/api/vendor-classifications/apply-presets', { method: 'POST' });
-      await fetchRows(null);
+      await fetchRows(null, periodType);
     })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchRows]);
 
-  // Refetch when selectedMonth changes; also discard any pending changes
+  // Refetch when selectedMonth or periodType changes; discard pending changes
   const prevMonth = useRef(selectedMonth);
+  const prevPeriodType = useRef(periodType);
   useEffect(() => {
-    if (prevMonth.current === selectedMonth) return;
-    prevMonth.current = selectedMonth;
-    setPendingChanges(new Map());
-    fetchRows(selectedMonth === 'current' ? null : selectedMonth, true);
-  }, [selectedMonth, fetchRows]);
+    const monthChanged  = prevMonth.current     !== selectedMonth;
+    const periodChanged = prevPeriodType.current !== periodType;
+    if (!monthChanged && !periodChanged) return;
+    prevMonth.current      = selectedMonth;
+    prevPeriodType.current = periodType;
+    if (monthChanged) setPendingChanges(new Map());
+    fetchRows(selectedMonth === 'current' ? null : selectedMonth, periodType, monthChanged);
+  }, [selectedMonth, periodType, fetchRows]);
 
   const applyPresets = useCallback(async () => {
     if (hasPending) {
@@ -153,14 +175,14 @@ export default function VendorClassificationsClient() {
       const res = await fetch('/api/vendor-classifications/apply-presets', { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Failed to apply presets');
-      await fetchRows(null);
+      await fetchRows(null, periodType);
       if (isHistoryMode) setSelectedMonth('current');
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setApplying(false);
     }
-  }, [fetchRows, hasPending, pendingChanges.size, isHistoryMode]);
+  }, [fetchRows, hasPending, pendingChanges.size, isHistoryMode, periodType]);
 
   const handleChannelChange = useCallback(
     (row: VendorClassificationRow, newChannel: string) => {
@@ -217,14 +239,14 @@ export default function VendorClassificationsClient() {
       setPendingChanges(new Map());
       setPreviewOpen(false);
       addToast(`✓ ${data.saved} classification${data.saved !== 1 ? 's' : ''} saved`, 'success');
-      await fetchRows(isHistoryMode ? selectedMonth : null);
+      await fetchRows(isHistoryMode ? selectedMonth : null, periodType);
     } catch (e) {
       setError((e as Error).message);
       addToast('Save failed — please retry', 'error');
     } finally {
       setIsSaving(false);
     }
-  }, [pendingChanges, fetchRows, addToast, isHistoryMode, selectedMonth]);
+  }, [pendingChanges, fetchRows, addToast, isHistoryMode, selectedMonth, periodType]);
 
   const handleDiscard = useCallback(() => {
     setRows((prev) =>
@@ -446,6 +468,35 @@ export default function VendorClassificationsClient() {
 
       {/* ── Filter bar ── */}
       <div className="flex flex-wrap items-center gap-3">
+        {/* Period type toggle */}
+        <div className="flex items-center gap-1.5">
+          <div className="inline-flex rounded-md border border-[var(--color-neutral)] overflow-hidden text-sm">
+            {(['accounting', 'transaction'] as PeriodType[]).map((pt) => (
+              <button
+                key={pt}
+                onClick={() => setPeriodType(pt)}
+                className={[
+                  'px-3 py-1.5 whitespace-nowrap transition-colors',
+                  periodType === pt
+                    ? 'bg-[var(--color-primary)] text-white'
+                    : 'bg-white text-gray-600 hover:bg-gray-50',
+                ].join(' ')}
+              >
+                {PERIOD_LABELS[pt]}
+              </button>
+            ))}
+          </div>
+          <span
+            title={PERIOD_TOOLTIPS[periodType]}
+            className="cursor-help select-none text-sm text-gray-400 hover:text-gray-600"
+            aria-label="Period type explanation"
+          >
+            ⓘ
+          </span>
+        </div>
+
+        <div className="h-5 w-px bg-gray-200" />
+
         {/* Month selector */}
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-gray-500 whitespace-nowrap">Viewing:</span>
