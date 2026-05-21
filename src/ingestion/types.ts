@@ -1,9 +1,12 @@
 export interface NetsuiteRow {
-  source: string;        // always "netsuite"
-  month_key: string;     // "YYYY-MM" derived from filename
-  financial_row: string; // e.g. "48501 - Partnership Commissions"
-  entity_name: string;   // e.g. "24601 Jive"
-  amount: number;        // BIGINT cents
+  source: string;                     // always "netsuite"
+  month_key: string;                  // "YYYY-MM" derived from filename
+  financial_row: string;              // e.g. "48501 - Partnership Commissions"
+  entity_name: string;                // e.g. "24601 Jive"
+  amount: number;                     // BIGINT cents
+  transaction_date: string | null;    // "YYYY-MM-DD" from column D (new format only)
+  accounting_period: string | null;   // "YYYY-MM" from column E (new format only)
+  description: string | null;         // column J memo/description (new format only)
 }
 
 export interface MarketingLeadsRow {

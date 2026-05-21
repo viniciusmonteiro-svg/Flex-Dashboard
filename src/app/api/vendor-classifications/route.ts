@@ -12,13 +12,24 @@ export interface VendorClassificationRow {
   updated_at: string | null;
   total_amount: number;
   months_active: number;
+  description: string | null; // representative description (for unassigned rows)
 }
 
 export async function GET(req: NextRequest) {
   try {
     await initDb();
 
-    const monthKey = new URL(req.url).searchParams.get('month_key') ?? null;
+    const { searchParams } = new URL(req.url);
+    const monthKey   = searchParams.get('month_key')   ?? null;
+    const periodType = searchParams.get('period_type') ?? 'accounting';
+
+    // Build the period expression used for spend totals.
+    // The classification itself is always stored by month_key (filename month) —
+    // period_type only affects how the total_amount figures are bucketed.
+    const spendPeriodExpr =
+      periodType === 'transaction'
+        ? `COALESCE(LEFT(n.transaction_date::text, 7), n.month_key)`
+        : `COALESCE(n.accounting_period, n.month_key)`;
 
     const rows = await query<{
       financial_row: string;
@@ -30,9 +41,10 @@ export async function GET(req: NextRequest) {
       updated_at: string | null;
       total_amount: string;
       months_active: string;
+      description: string | null;
     }>(
       // History mode ($1 IS NOT NULL): filter actuals to the selected month so
-      //   SUM(amount) and COUNT(DISTINCT month_key) reflect that period only.
+      //   SUM(amount) and COUNT(DISTINCT period) reflect that period only.
       //   vch join on $1 picks the month-specific classification.
       // Current mode ($1 IS NULL): no WHERE filter → all months aggregated.
       //   vch join condition (month_key = NULL) never matches, so COALESCE falls
@@ -46,7 +58,8 @@ export async function GET(req: NextRequest) {
          COALESCE(vch.manually_set, vc.manually_set, FALSE)         AS manually_set,
          vc.updated_at,
          SUM(n.amount)                                              AS total_amount,
-         COUNT(DISTINCT n.month_key)                                AS months_active
+         COUNT(DISTINCT ${spendPeriodExpr})                         AS months_active,
+         MAX(n.description)                                         AS description
        FROM netsuite_actuals n
        LEFT JOIN vendor_classifications vc
               ON vc.financial_row = n.financial_row
@@ -64,15 +77,16 @@ export async function GET(req: NextRequest) {
     );
 
     const mapped: VendorClassificationRow[] = rows.map((r) => ({
-      financial_row: r.financial_row,
-      entity_name: r.entity_name,
-      channel: r.channel,
+      financial_row:   r.financial_row,
+      entity_name:     r.entity_name,
+      channel:         r.channel,
       current_channel: r.current_channel,
-      is_preset: r.is_preset,
-      manually_set: r.manually_set,
-      updated_at: r.updated_at ?? null,
-      total_amount: Number(r.total_amount) / 100,
-      months_active: Number(r.months_active),
+      is_preset:       r.is_preset,
+      manually_set:    r.manually_set,
+      updated_at:      r.updated_at ?? null,
+      total_amount:    Number(r.total_amount) / 100,
+      months_active:   Number(r.months_active),
+      description:     r.description ?? null,
     }));
 
     return NextResponse.json({ rows: mapped });

@@ -47,20 +47,29 @@ async function runBatches<T>(
 
 // ─── Upsert functions ─────────────────────────────────────────────────────────
 
-// 5 columns per row → batch 1 000 rows = 5 000 params (well under the 65 535 limit)
+// 8 columns per row → batch 500 rows = 4 000 params (well under the 65 535 limit)
 export async function upsertNetsuiteActuals(rows: NetsuiteRow[]): Promise<void> {
   await runBatches(
     rows,
-    1000,
-    5,
-    (r) => [r.source, r.month_key, r.financial_row, r.entity_name, r.amount],
+    500,
+    8,
+    (r) => [
+      r.source, r.month_key, r.financial_row, r.entity_name, r.amount,
+      r.transaction_date ?? null,
+      r.accounting_period ?? null,
+      r.description ?? null,
+    ],
     (values) => `
       INSERT INTO netsuite_actuals
-        (source, month_key, financial_row, entity_name, amount)
+        (source, month_key, financial_row, entity_name, amount,
+         transaction_date, accounting_period, description)
       VALUES ${values}
       ON CONFLICT (month_key, financial_row, entity_name) DO UPDATE SET
-        amount      = EXCLUDED.amount,
-        ingested_at = NOW()`
+        amount            = EXCLUDED.amount,
+        transaction_date  = EXCLUDED.transaction_date,
+        accounting_period = EXCLUDED.accounting_period,
+        description       = EXCLUDED.description,
+        ingested_at       = NOW()`
   );
 }
 

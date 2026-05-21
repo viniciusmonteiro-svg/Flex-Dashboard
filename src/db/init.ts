@@ -40,6 +40,11 @@ CREATE TABLE IF NOT EXISTS ingested_files (
   notes            TEXT
 );
 
+-- Migration: add new columns introduced by the CurveMonthlyMarketingReport format
+ALTER TABLE netsuite_actuals ADD COLUMN IF NOT EXISTS transaction_date   DATE;
+ALTER TABLE netsuite_actuals ADD COLUMN IF NOT EXISTS accounting_period  TEXT;
+ALTER TABLE netsuite_actuals ADD COLUMN IF NOT EXISTS description        TEXT;
+
 -- Migration: upgrade existing installs with old ingested_files schema
 ALTER TABLE ingested_files ADD COLUMN IF NOT EXISTS file_name       TEXT;
 ALTER TABLE ingested_files ADD COLUMN IF NOT EXISTS source_type     TEXT;
@@ -152,8 +157,10 @@ CREATE INDEX IF NOT EXISTS idx_vendor_class_channel   ON vendor_classifications(
 CREATE INDEX IF NOT EXISTS idx_sf_created_month       ON salesforce_opportunities(created_month);
 CREATE INDEX IF NOT EXISTS idx_sf_channel             ON salesforce_opportunities(primary_channel);
 CREATE INDEX IF NOT EXISTS idx_sf_stage               ON salesforce_opportunities(stage);
-CREATE INDEX IF NOT EXISTS idx_vc_history_month       ON vendor_classification_history(month_key);
-CREATE INDEX IF NOT EXISTS idx_vc_history_entity      ON vendor_classification_history(financial_row, entity_name);
+CREATE INDEX IF NOT EXISTS idx_vc_history_month             ON vendor_classification_history(month_key);
+CREATE INDEX IF NOT EXISTS idx_vc_history_entity            ON vendor_classification_history(financial_row, entity_name);
+CREATE INDEX IF NOT EXISTS idx_netsuite_accounting_period   ON netsuite_actuals(accounting_period);
+CREATE INDEX IF NOT EXISTS idx_netsuite_transaction_date    ON netsuite_actuals(transaction_date);
 
 -- Backfill vendor_classification_history from current vendor_classifications.
 -- Idempotent: ON CONFLICT DO NOTHING skips rows that already exist.
