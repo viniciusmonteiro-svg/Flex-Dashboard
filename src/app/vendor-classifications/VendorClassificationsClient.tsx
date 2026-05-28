@@ -292,22 +292,36 @@ export default function VendorClassificationsClient() {
         header: 'Vendor / Entity',
         cell: ({ row }) => {
           const { entity_name, financial_row, description } = row.original;
-          const isUnassigned = !entity_name || entity_name === '-Unassigned-';
-          const detail = isUnassigned ? (description ?? null) : null;
+
+          if (entity_name === '-Unassigned-') {
+            // Truncate description subtitle at 80 chars
+            const subtitle = description
+              ? (description.length > 80 ? description.slice(0, 80) + '…' : description)
+              : '(no detail)';
+            return (
+              <div>
+                <span className="font-mono text-xs text-gray-900">-Unassigned-</span>
+                {financial_row && (
+                  <div className="mt-0.5 font-mono text-[11px] text-gray-400 truncate max-w-xs">
+                    {financial_row}
+                  </div>
+                )}
+                <div
+                  className={[
+                    'mt-0.5 text-[11px] italic max-w-xs',
+                    description ? 'text-gray-400' : 'text-gray-300',
+                  ].join(' ')}
+                  title={description ?? undefined}
+                >
+                  {subtitle}
+                </div>
+              </div>
+            );
+          }
+
           return (
             <div>
-              {entity_name ? (
-                <span className="font-mono text-xs text-gray-900">{entity_name}</span>
-              ) : (
-                <span className="font-mono text-xs italic text-gray-400">—</span>
-              )}
-              {detail ? (
-                <div className="mt-0.5 text-[11px] italic text-gray-400 truncate max-w-xs" title={detail}>
-                  {detail}
-                </div>
-              ) : isUnassigned ? (
-                <div className="mt-0.5 text-[11px] italic text-gray-300">(no detail)</div>
-              ) : null}
+              <span className="font-mono text-xs text-gray-900">{entity_name}</span>
               {financial_row && (
                 <div className="mt-0.5 font-mono text-[11px] text-gray-400 truncate max-w-xs">
                   {financial_row}

@@ -93,9 +93,16 @@ export const netsuiteSpend: SourceDefinition<NetsuiteRow> = {
     let currentFinancialRow = '';
 
     for (const row of rows) {
-      const rawFR      = String(row['Financial Row'] ?? '').trim();
-      const entity_name = String(row['Name']         ?? '').trim();
-      const description = String(row['Description']  ?? '').trim() || null;
+      const rawFR  = String(row['Financial Row'] ?? '').trim();
+
+      // Name columns — check BEFORE applying fallback so skip logic works correctly
+      const nameG   = String(row['Name']           ?? '').trim(); // col G
+      const entityN = String(row['Entity (Line)']  ?? '').trim(); // col N
+
+      // Description columns — col J first, col I (Memo) as fallback
+      const descJ   = String(row['Description'] ?? '').trim(); // col J
+      const memoI   = String(row['Memo']        ?? '').trim(); // col I
+      const description = descJ || memoI || null;
 
       // Total rows — skip without updating carry-forward
       if (/^total/i.test(rawFR)) continue;
@@ -104,15 +111,18 @@ export const netsuiteSpend: SourceDefinition<NetsuiteRow> = {
       if (rawFR) {
         if (SECTION_HEADERS.has(rawFR)) continue;
         currentFinancialRow = rawFR;
-        // Pure group header: has a GL label but no entity or description — carry forward only
-        if (!entity_name && !description) continue;
+        // Pure group header: GL label only, no entity and no description — carry forward only
+        if (!nameG && !entityN && !description) continue;
       }
 
       // No current group yet — skip
       if (!currentFinancialRow) continue;
 
-      // Skip pure journal entries with no identifying detail
-      if (!entity_name && !description) continue;
+      // Skip pure journal entries with zero identifying information
+      if (!nameG && !entityN && !description) continue;
+
+      // Apply entity name fallback chain AFTER skip checks
+      const entity_name = nameG || entityN || '-Unassigned-';
 
       const transaction_date  = parseTransactionDate(row['Date']);
       const accounting_period =
