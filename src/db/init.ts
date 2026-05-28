@@ -8,8 +8,8 @@ CREATE TABLE IF NOT EXISTS netsuite_actuals (
   financial_row  TEXT NOT NULL,
   entity_name    TEXT NOT NULL,
   amount         BIGINT NOT NULL DEFAULT 0,
-  ingested_at    TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE (month_key, financial_row, entity_name)
+  ingested_at    TIMESTAMPTZ DEFAULT NOW()
+  -- UNIQUE constraint defined in migration below (includes tx_month)
 );
 
 CREATE TABLE IF NOT EXISTS marketing_leads (
@@ -44,6 +44,37 @@ CREATE TABLE IF NOT EXISTS ingested_files (
 ALTER TABLE netsuite_actuals ADD COLUMN IF NOT EXISTS transaction_date   DATE;
 ALTER TABLE netsuite_actuals ADD COLUMN IF NOT EXISTS accounting_period  TEXT;
 ALTER TABLE netsuite_actuals ADD COLUMN IF NOT EXISTS description        TEXT;
+ALTER TABLE netsuite_actuals ADD COLUMN IF NOT EXISTS has_name           BOOLEAN NOT NULL DEFAULT TRUE;
+-- tx_month: "YYYY-MM" of the transaction date, or '' when no date available.
+-- Part of the unique key so Sep 30 entries in an Oct file are stored separately
+-- from the same vendor's October transactions.
+ALTER TABLE netsuite_actuals ADD COLUMN IF NOT EXISTS tx_month           TEXT NOT NULL DEFAULT '';
+
+-- Migrate unique constraint from (month_key, financial_row, entity_name) to
+-- (month_key, financial_row, entity_name, tx_month).
+-- Named netsuite_actuals_unique_tx so the ON CONFLICT clause can reference it.
+DO $mig$
+BEGIN
+  -- Drop the old constraint if it still exists
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'netsuite_actuals_month_key_financial_row_entity_name_key'
+      AND conrelid = 'netsuite_actuals'::regclass
+  ) THEN
+    ALTER TABLE netsuite_actuals
+      DROP CONSTRAINT netsuite_actuals_month_key_financial_row_entity_name_key;
+  END IF;
+  -- Create new constraint if not already present
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'netsuite_actuals_unique_tx'
+      AND conrelid = 'netsuite_actuals'::regclass
+  ) THEN
+    ALTER TABLE netsuite_actuals
+      ADD CONSTRAINT netsuite_actuals_unique_tx
+      UNIQUE (month_key, financial_row, entity_name, tx_month);
+  END IF;
+END $mig$;
 
 -- Migration: upgrade existing installs with old ingested_files schema
 ALTER TABLE ingested_files ADD COLUMN IF NOT EXISTS file_name       TEXT;
@@ -55,28 +86,66 @@ ALTER TABLE ingested_files ADD COLUMN IF NOT EXISTS status          TEXT DEFAULT
 ALTER TABLE ingested_files ADD COLUMN IF NOT EXISTS notes           TEXT;
 
 CREATE TABLE IF NOT EXISTS users (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  clerk_id    TEXT UNIQUE NOT NULL,
-  email       TEXT NOT NULL,
-  role        TEXT DEFAULT 'viewer',
-  created_at  TIMESTAMPTZ DEFAULT NOW()
+  id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  clerk_id      TEXT        UNIQUE NOT NULL,
+  email         TEXT        NOT NULL,
+  name          TEXT        NOT NULL DEFAULT '',
+  role          TEXT        NOT NULL DEFAULT 'viewer',
+  password_hash TEXT        DEFAULT '',
+  is_active     BOOLEAN     NOT NULL DEFAULT true,
+  approved_at   TIMESTAMPTZ,
+  last_login    TIMESTAMPTZ,
+  created_at    TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_users_clerk_id ON users (clerk_id);
+CREATE INDEX IF NOT EXISTS idx_users_email    ON users (email);
+
+-- Idempotent migrations for existing installs with the old slim users schema
+ALTER TABLE users ADD COLUMN IF NOT EXISTS name          TEXT        NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT        DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active     BOOLEAN     NOT NULL DEFAULT true;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS approved_at   TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login    TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS access_requests (
-  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  clerk_id      TEXT UNIQUE NOT NULL,
-  email         TEXT NOT NULL,
-  status        TEXT DEFAULT 'pending',
-  requested_at  TIMESTAMPTZ DEFAULT NOW()
+  id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  clerk_id     TEXT        UNIQUE NOT NULL,
+  email        TEXT        NOT NULL,
+  name         TEXT        NOT NULL DEFAULT '',
+  status       TEXT        NOT NULL DEFAULT 'pending',
+  requested_at TIMESTAMPTZ DEFAULT NOW(),
+  resolved_at  TIMESTAMPTZ,
+  resolved_by  TEXT
 );
+CREATE INDEX IF NOT EXISTS idx_access_requests_status   ON access_requests (status);
+CREATE INDEX IF NOT EXISTS idx_access_requests_clerk_id ON access_requests (clerk_id);
+
+ALTER TABLE access_requests ADD COLUMN IF NOT EXISTS name        TEXT        NOT NULL DEFAULT '';
+ALTER TABLE access_requests ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ;
+ALTER TABLE access_requests ADD COLUMN IF NOT EXISTS resolved_by TEXT;
 
 CREATE TABLE IF NOT EXISTS audit_logs (
-  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  admin_clerk_id   TEXT NOT NULL,
-  action           TEXT NOT NULL,
-  target_clerk_id  TEXT,
-  created_at       TIMESTAMPTZ DEFAULT NOW()
+  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  actor_id   TEXT,
+  action     TEXT        NOT NULL,
+  target_id  TEXT,
+  metadata   JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_audit_logs_actor  ON audit_logs (actor_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs (action);
+
+CREATE TABLE IF NOT EXISTS pre_approved_emails (
+  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  email      TEXT        UNIQUE NOT NULL,
+  role       TEXT        NOT NULL DEFAULT 'viewer',
+  note       TEXT,
+  created_by TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  claimed_at TIMESTAMPTZ,
+  claimed_by TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_pre_approved_email ON pre_approved_emails (email);
 
 CREATE TABLE IF NOT EXISTS vendor_classifications (
   id            SERIAL PRIMARY KEY,
@@ -147,6 +216,12 @@ CREATE TABLE IF NOT EXISTS vendor_classification_history (
   UNIQUE (financial_row, entity_name, month_key)
 );
 
+-- Migration: add updated_at to vendor_classification_history so manual
+-- reclassifications are tracked separately from the original created_at.
+-- Backfill from created_at so existing rows reflect their original timestamp.
+ALTER TABLE vendor_classification_history ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+UPDATE vendor_classification_history SET updated_at = created_at WHERE updated_at IS NULL;
+
 CREATE INDEX IF NOT EXISTS idx_netsuite_month         ON netsuite_actuals(month_key);
 CREATE INDEX IF NOT EXISTS idx_netsuite_financial_row ON netsuite_actuals(financial_row);
 CREATE INDEX IF NOT EXISTS idx_netsuite_entity        ON netsuite_actuals(entity_name);
@@ -154,9 +229,15 @@ CREATE INDEX IF NOT EXISTS idx_leads_month            ON marketing_leads(month_k
 CREATE INDEX IF NOT EXISTS idx_leads_channel          ON marketing_leads(channel);
 CREATE INDEX IF NOT EXISTS idx_vendor_class_entity    ON vendor_classifications(entity_name);
 CREATE INDEX IF NOT EXISTS idx_vendor_class_channel   ON vendor_classifications(channel);
+-- Migration: add demoed flag for demo show-rate tracking
+ALTER TABLE salesforce_opportunities ADD COLUMN IF NOT EXISTS demoed      BOOLEAN DEFAULT false;
+-- Migration: add order_type for New / Upsell Group segmentation
+ALTER TABLE salesforce_opportunities ADD COLUMN IF NOT EXISTS order_type  TEXT;
+
 CREATE INDEX IF NOT EXISTS idx_sf_created_month       ON salesforce_opportunities(created_month);
 CREATE INDEX IF NOT EXISTS idx_sf_channel             ON salesforce_opportunities(primary_channel);
 CREATE INDEX IF NOT EXISTS idx_sf_stage               ON salesforce_opportunities(stage);
+CREATE INDEX IF NOT EXISTS idx_sf_demoed              ON salesforce_opportunities(demoed);
 CREATE INDEX IF NOT EXISTS idx_vc_history_month             ON vendor_classification_history(month_key);
 CREATE INDEX IF NOT EXISTS idx_vc_history_entity            ON vendor_classification_history(financial_row, entity_name);
 CREATE INDEX IF NOT EXISTS idx_netsuite_accounting_period   ON netsuite_actuals(accounting_period);

@@ -1,3 +1,5 @@
+import { UserButton } from '@clerk/nextjs';
+
 export function Header() {
   return (
     <header className="sticky top-0 z-50 w-full bg-[var(--color-primary)] text-white">
@@ -5,7 +7,13 @@ export function Header() {
         <span className="font-sans text-base font-bold tracking-tight">
           Marketing Dashboard
         </span>
-        {/* Clerk UserButton will mount here when auth is added */}
+        <UserButton
+          appearance={{
+            elements: {
+              avatarBox: 'w-8 h-8',
+            },
+          }}
+        />
       </div>
     </header>
   );
