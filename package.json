@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node -e \"const fs=require('fs');fs.mkdirSync('.next/server',{recursive:true});const p='.next/server/middleware.js.nft.json';if(!fs.existsSync(p))fs.writeFileSync(p,JSON.stringify({version:1,files:[]}))\"",
     "build": "next build",
     "postbuild": "node scripts/fix-middleware-nft.mjs",
     "start": "next start",
