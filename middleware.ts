@@ -1,7 +1,11 @@
-import { clerkMiddleware } from '@clerk/nextjs/server';
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 
-// Auth disabled — pass everything through. Re-enable when ready.
-export default clerkMiddleware(() => {});
+// Plain pass-through — no Clerk middleware while diagnosing Vercel deployment.
+// Auth will be re-enabled once the base app is confirmed working on Vercel.
+export function middleware(_request: NextRequest) {
+  return NextResponse.next();
+}
 
 export const config = {
   matcher: [
