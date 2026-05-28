@@ -132,6 +132,10 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   metadata   JSONB,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+-- Migration: add new columns to audit_logs if they don't exist (old schema had different columns)
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS actor_id  TEXT;
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS target_id TEXT;
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS metadata  JSONB;
 CREATE INDEX IF NOT EXISTS idx_audit_logs_actor  ON audit_logs (actor_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs (action);
 
