@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "postbuild": "node scripts/fix-middleware-nft.mjs",
     "start": "next start",
     "check-source": "tsx scripts/check-source.ts",
     "ingest": "npx tsx --tsconfig tsconfig.scripts.json scripts/ingest.ts",
