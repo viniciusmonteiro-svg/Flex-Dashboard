@@ -1,18 +1,12 @@
-import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { getPoolInstance } from '@/db/connection';
 import { initDb } from '@/db/init';
 import { clerkClient } from '@clerk/nextjs/server';
-
-async function requireAdmin() {
-  const { sessionClaims } = await auth();
-  const role = (sessionClaims?.publicMetadata as { role?: string })?.role;
-  if (role !== 'admin') throw new Error('Forbidden');
-}
+import { requireAdminApi } from '@/lib/requireAuth';
 
 export async function POST(req: Request) {
   try {
-    await requireAdmin();
+    await requireAdminApi();
     const { clerk_id, role } = await req.json();
     if (!clerk_id || !role) {
       return NextResponse.json({ ok: false, error: 'clerk_id and role required' }, { status: 400 });

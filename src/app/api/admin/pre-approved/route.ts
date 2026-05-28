@@ -1,17 +1,11 @@
-import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { getPoolInstance } from '@/db/connection';
 import { initDb } from '@/db/init';
-
-async function requireAdmin() {
-  const { sessionClaims } = await auth();
-  const role = (sessionClaims?.publicMetadata as { role?: string })?.role;
-  if (role !== 'admin') throw new Error('Forbidden');
-}
+import { requireAdminApi } from '@/lib/requireAuth';
 
 export async function GET() {
   try {
-    await requireAdmin();
+    await requireAdminApi();
     await initDb();
     const pool = getPoolInstance();
     const { rows } = await pool.query(
@@ -28,8 +22,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    await requireAdmin();
-    const { userId } = await auth();
+    const userId = await requireAdminApi();
     const { email, role, note } = await req.json();
 
     if (!email || !role) {
@@ -57,7 +50,7 @@ export async function POST(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
-    await requireAdmin();
+    await requireAdminApi();
     const { id } = await req.json();
     if (!id) return NextResponse.json({ ok: false, error: 'id required' }, { status: 400 });
 

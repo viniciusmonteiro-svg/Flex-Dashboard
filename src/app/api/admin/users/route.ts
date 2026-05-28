@@ -1,17 +1,11 @@
-import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { getPoolInstance } from '@/db/connection';
 import { initDb } from '@/db/init';
-
-async function requireAdmin() {
-  const { sessionClaims } = await auth();
-  const role = (sessionClaims?.publicMetadata as { role?: string })?.role;
-  if (role !== 'admin') throw new Error('Forbidden');
-}
+import { requireAdminApi } from '@/lib/requireAuth';
 
 export async function GET() {
   try {
-    await requireAdmin();
+    await requireAdminApi();
     await initDb();
     const pool = getPoolInstance();
     const { rows } = await pool.query(
