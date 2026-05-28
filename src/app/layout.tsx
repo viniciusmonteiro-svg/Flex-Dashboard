@@ -29,7 +29,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <ClerkProvider>
+    <ClerkProvider
+      signInUrl="/sign-in"
+      signUpUrl="/sign-in"
+      signInFallbackRedirectUrl="/"
+      signUpFallbackRedirectUrl="/"
+    >
       <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
         <body className="min-h-screen bg-[var(--color-band)] font-sans antialiased">
           <UnsavedChangesProvider>
