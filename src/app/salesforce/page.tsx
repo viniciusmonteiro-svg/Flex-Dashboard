@@ -1,5 +1,7 @@
+import { requireAuth } from '@/lib/requireAuth';
 import SalesforceClient from './SalesforceClient';
 
-export default function SalesforcePage() {
+export default async function SalesforcePage() {
+  await requireAuth();
   return <SalesforceClient />;
 }

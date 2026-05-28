@@ -1,5 +1,7 @@
+import { requireAuth } from '@/lib/requireAuth';
 import ChannelCostsClient from './ChannelCostsClient';
 
-export default function ChannelCostsPage() {
+export default async function ChannelCostsPage() {
+  await requireAuth();
   return <ChannelCostsClient />;
 }
