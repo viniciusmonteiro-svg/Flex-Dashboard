@@ -4,9 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "prebuild": "node -e \"const fs=require('fs');fs.mkdirSync('.next/server',{recursive:true});const p='.next/server/middleware.js.nft.json';if(!fs.existsSync(p))fs.writeFileSync(p,JSON.stringify({version:1,files:[]}))\"",
-    "build": "next build",
-    "postbuild": "node scripts/fix-middleware-nft.mjs",
+    "build": "next build --webpack",
     "start": "next start",
     "check-source": "tsx scripts/check-source.ts",
     "ingest": "npx tsx --tsconfig tsconfig.scripts.json scripts/ingest.ts",
