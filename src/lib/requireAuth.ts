@@ -14,8 +14,10 @@ export async function requireAuth(): Promise<{ userId: string; role: string }> {
 
   const meta = (user.publicMetadata ?? {}) as Meta;
 
-  // No status = webhook never ran (or failed). Treat same as pending.
-  if (!meta.status || meta.status === 'pending') redirect('/pending');
+  // No status = webhook hasn't fired yet (race condition on first sign-in).
+  // Send to /checking which polls until metadata is populated.
+  if (!meta.status) redirect('/checking');
+  if (meta.status === 'pending') redirect('/pending');
   if (meta.status === 'denied') redirect('/access-denied');
 
   return { userId: user.id, role: meta.role ?? 'viewer' };
