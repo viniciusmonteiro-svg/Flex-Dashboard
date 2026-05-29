@@ -1,26 +1,28 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { useSession, useClerk } from '@clerk/nextjs';
 
 /**
  * Race-condition buffer page.
  *
- * On first sign-in, Clerk fires `user.created` async (~1-3 s after the browser
- * lands on the app). The JWT at that point has empty publicMetadata, so
- * proxy.ts redirects here instead of to /pending.
- *
- * This page polls /api/auth/status (which uses currentUser() — bypasses the
- * JWT cache and reads live Clerk data) every 2 s. Once the webhook has set
- * the metadata, it does a full page reload so the browser gets a fresh JWT
- * cookie with the correct status, and proxy.ts lets the user through.
+ * On first sign-in the JWT has empty publicMetadata (webhook hasn't run yet),
+ * so proxy.ts redirects here. This page polls /api/auth/status (currentUser()
+ * — live Clerk API) every 2 s. Once the webhook sets the metadata, we call
+ * session.reload() to force Clerk to issue a fresh JWT cookie, then do a full
+ * page reload so proxy.ts reads the correct status from the new token.
  */
 export default function CheckingPage() {
-  const startedAt = useRef(Date.now());
+  const startedAt    = useRef(Date.now());
+  const { session }  = useSession();
+  const { signOut }  = useClerk();
+  const timedOut     = useRef(false);
 
   useEffect(() => {
     const poll = async () => {
-      // After 15 s with no webhook response, fall back to /pending
-      if (Date.now() - startedAt.current > 15_000) {
+      // After 12 s with no webhook response, fall back to /pending
+      if (Date.now() - startedAt.current > 12_000) {
+        timedOut.current = true;
         window.location.href = '/pending';
         return;
       }
@@ -31,9 +33,10 @@ export default function CheckingPage() {
 
         if (data.status && data.status !== 'unauthenticated') {
           // Webhook has fired and metadata is set.
-          // window.location.href (full reload) forces the browser to send a
-          // fresh request. Clerk detects the updated session version and issues
-          // a new JWT cookie. proxy.ts then reads the correct status.
+          // Reload the Clerk session to get a fresh JWT with the updated
+          // publicMetadata, then do a full-page navigation so proxy.ts
+          // reads the new token instead of the stale one.
+          if (session) await session.reload();
           window.location.href = '/';
         } else {
           setTimeout(poll, 2000);
@@ -45,14 +48,20 @@ export default function CheckingPage() {
 
     const id = setTimeout(poll, 1000);
     return () => clearTimeout(id);
-  }, []);
+  }, [session]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="w-full max-w-sm bg-white rounded-2xl border border-gray-200 shadow-sm px-8 py-10 text-center">
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-[var(--color-primary)] mx-auto mb-5" />
         <h1 className="text-lg font-bold text-gray-900 mb-2">Setting up your account…</h1>
-        <p className="text-sm text-gray-500">This only takes a moment.</p>
+        <p className="text-sm text-gray-500 mb-8">This only takes a moment.</p>
+        <button
+          onClick={() => signOut({ redirectUrl: '/sign-in' })}
+          className="w-full rounded-lg border border-gray-200 text-gray-500 text-sm font-medium py-2.5 hover:bg-gray-50 transition-colors"
+        >
+          Sign out
+        </button>
       </div>
     </div>
   );
