@@ -24,13 +24,15 @@ export default clerkMiddleware(async (auth, req) => {
     role?: string;
   };
 
-  // Empty status = webhook hasn't fired yet (race condition on first sign-in).
-  // Do NOT treat empty status as pending — send to /checking instead.
-  // /checking polls /api/auth/status (which uses currentUser() for live data)
-  // until the webhook completes, then does a full-page reload to get a fresh JWT.
-  if (!meta.status) {
-    return NextResponse.redirect(new URL("/checking", req.url));
-  }
+  // Clerk's default JWT template does NOT include publicMetadata, so
+  // sessionClaims.publicMetadata is always {} here. We can only act on
+  // values that are explicitly present. Empty status means either:
+  //   (a) the JWT template doesn't expose publicMetadata (most common), or
+  //   (b) the webhook hasn't fired yet for a brand-new user.
+  // In both cases, fall through and let the page-level requireAuth() (which
+  // calls currentUser() — the live Clerk API) do the real authorization.
+  // Redirecting to /checking here causes an infinite loop because even a
+  // fresh JWT from session.reload() won't contain publicMetadata.
 
   if (meta.status === "denied") {
     return NextResponse.redirect(new URL("/access-denied", req.url));
@@ -40,7 +42,9 @@ export default clerkMiddleware(async (auth, req) => {
     return NextResponse.redirect(new URL("/pending", req.url));
   }
 
-  if (isAdminRoute(req) && meta.role !== "admin") {
+  // Only enforce admin gate when role is actually present in the JWT.
+  // If role is absent (template doesn't include it), requireAdmin() handles it.
+  if (isAdminRoute(req) && meta.role && meta.role !== "admin") {
     return NextResponse.redirect(new URL("/access-denied", req.url));
   }
 
