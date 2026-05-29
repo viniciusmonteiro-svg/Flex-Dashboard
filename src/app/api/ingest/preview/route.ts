@@ -4,6 +4,10 @@ import { getSources } from '@/ingestion/registry';
 import { scanSource } from '@/ingestion/scanner';
 
 export async function POST() {
+  if (!process.env.SOURCE_DATA_PATH) {
+    return NextResponse.json({ sources: [], read_only: true });
+  }
+
   try {
     await initDb();
     const sources = getSources();

@@ -30,6 +30,7 @@ export interface DmSourceSection {
 
 export interface DataManagementResponse {
   last_scan_at: string;
+  read_only: boolean;
   netsuite: DmSourceSection;
   salesforce: DmSourceSection;
 }
@@ -45,7 +46,7 @@ interface DbFileRow {
   ingested_at: string | null;
 }
 
-// ─── Per-source builder ────────────────────────────────────────────────────────
+// ─── Full section (filesystem + DB) ───────────────────────────────────────────
 
 async function buildSection(
   source: SourceDefinition,
@@ -79,7 +80,6 @@ async function buildSection(
   // Build file list — disk files first
   const files: DmFileInfo[] = diskFiles.map((f) => {
     const db = dbByPath.get(f.path);
-    // If file changed since last ingest and DB shows ok → mark as pending
     const dbStatus: DmFileInfo['db_status'] = db
       ? db.status === 'ok' && f.status === 'updated'
         ? 'pending'
@@ -114,7 +114,6 @@ async function buildSection(
     }
   }
 
-  // Sort newest month first, then by filename
   files.sort((a, b) =>
     b.month_key.localeCompare(a.month_key) || a.filename.localeCompare(b.filename)
   );
@@ -127,23 +126,69 @@ async function buildSection(
   };
 }
 
+// ─── DB-only section (no filesystem access) ───────────────────────────────────
+
+async function buildSectionDbOnly(
+  source: SourceDefinition,
+  rowTable: string
+): Promise<DmSourceSection> {
+  const [totalResult, lastIngestedResult, dbFiles] = await Promise.all([
+    queryOne<{ count: string }>(`SELECT COUNT(*)::text AS count FROM ${rowTable}`),
+    queryOne<{ ingested_at: string | null }>(
+      `SELECT MAX(ingested_at)::text AS ingested_at
+         FROM ingested_files
+        WHERE source_type = $1`,
+      [source.name]
+    ),
+    query<DbFileRow>(
+      `SELECT file_path, file_name, row_count, status, notes, ingested_at::text
+         FROM ingested_files
+        WHERE source_type = $1
+        ORDER BY ingested_at DESC`,
+      [source.name]
+    ),
+  ]);
+
+  const files: DmFileInfo[] = dbFiles.map((db) => ({
+    filename: db.file_name ?? db.file_path.split(/[\\/]/).pop() ?? db.file_path,
+    file_path: db.file_path,
+    month_key: '',
+    scan_status: 'not_synced' as const,
+    db_rows: db.row_count ?? null,
+    db_status: db.status as DmFileInfo['db_status'],
+    ingested_at: db.ingested_at,
+    error: db.notes,
+  }));
+
+  return {
+    folder_path: '',
+    total_rows: parseInt(totalResult?.count ?? '0', 10),
+    last_ingested_at: lastIngestedResult?.ingested_at ?? null,
+    files,
+  };
+}
+
 // ─── Route ────────────────────────────────────────────────────────────────────
 
 export async function GET() {
   try {
     await initDb();
 
+    const readOnly = !process.env.SOURCE_DATA_PATH;
     const sources = getSources();
     const netsuite = sources.find((s) => s.name === 'netsuiteSpend')!;
     const salesforce = sources.find((s) => s.name === 'salesforceLeads')!;
 
+    const builder = readOnly ? buildSectionDbOnly : buildSection;
+
     const [netsuiteSection, salesforceSection] = await Promise.all([
-      buildSection(netsuite, 'netsuite_actuals'),
-      buildSection(salesforce, 'salesforce_opportunities'),
+      builder(netsuite, 'netsuite_actuals'),
+      builder(salesforce, 'salesforce_opportunities'),
     ]);
 
     return NextResponse.json({
       last_scan_at: new Date().toISOString(),
+      read_only: readOnly,
       netsuite: netsuiteSection,
       salesforce: salesforceSection,
     } satisfies DataManagementResponse);

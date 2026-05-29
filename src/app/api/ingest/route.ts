@@ -6,6 +6,13 @@ import { ingestFiles } from '@/ingestion/pipeline';
 import { rebuildDerivedTables } from '@/ingestion/rebuild';
 
 export async function POST(req: NextRequest) {
+  if (!process.env.SOURCE_DATA_PATH) {
+    return NextResponse.json(
+      { error: 'Ingestion not available in this environment' },
+      { status: 400 }
+    );
+  }
+
   try {
     await initDb();
 
@@ -27,10 +34,12 @@ export async function POST(req: NextRequest) {
       results.push({ source: source.name, label: source.label, ...result });
     }
 
-    // Only rebuild derived tables when all sources are ingested together
-    if (!sourceParam) {
-      await rebuildDerivedTables();
-    }
+    // Rebuild classification history after every ingest, regardless of which source.
+    // This creates vendor_classification_history entries for any new
+    // (financial_row, entity_name, month_key) tuples and auto-classifies
+    // GL-prefix vendors (54/55/60xxx) that appear for the first time.
+    // Salesforce-only ingests are also safe — the function is idempotent.
+    await rebuildDerivedTables();
 
     return NextResponse.json({ results });
   } catch (err) {
