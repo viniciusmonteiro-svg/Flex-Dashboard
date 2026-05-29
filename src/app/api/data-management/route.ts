@@ -126,6 +126,27 @@ async function buildSection(
   };
 }
 
+// ─── Month key extraction from stored file paths ──────────────────────────────
+
+function extractMonthKey(filePath: string, fileName: string | null): string {
+  // 1. YYYYMM folder: .../202401/file.xls → '2024-01'
+  const folderYYYYMM = filePath.match(/[/\\](\d{6})[/\\]/);
+  if (folderYYYYMM) {
+    const ym = folderYYYYMM[1];
+    return `${ym.slice(0, 4)}-${ym.slice(4, 6)}`;
+  }
+
+  // 2. Year folder + BF filename: .../2024/CurveMonthlyMarketingReport(BF)-01.2024.xls
+  const bfMatch = (fileName ?? filePath).match(/\(BF\)-(\d{2})\.(\d{4})\.xls$/i);
+  if (bfMatch) return `${bfMatch[2]}-${bfMatch[1]}`;
+
+  // 3. Year folder only: .../2024/file.xls → '2024'
+  const folderYYYY = filePath.match(/[/\\](\d{4})[/\\]/);
+  if (folderYYYY) return folderYYYY[1];
+
+  return '';
+}
+
 // ─── DB-only section (no filesystem access) ───────────────────────────────────
 
 async function buildSectionDbOnly(
@@ -152,7 +173,7 @@ async function buildSectionDbOnly(
   const files: DmFileInfo[] = dbFiles.map((db) => ({
     filename: db.file_name ?? db.file_path.split(/[\\/]/).pop() ?? db.file_path,
     file_path: db.file_path,
-    month_key: '',
+    month_key: extractMonthKey(db.file_path, db.file_name),
     scan_status: 'not_synced' as const,
     db_rows: db.row_count ?? null,
     db_status: db.status as DmFileInfo['db_status'],
