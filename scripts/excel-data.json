@@ -1,0 +1,946 @@
+{
+  "channel_q_totals": {
+    "Trade Show": {
+      "Q2 2025": 225963.0,
+      "Q1 2025": 345084.0,
+      "Q1 2026": 472370.0,
+      "Q4 2025": 321650.0,
+      "Q3 2025": 226835.0
+    }
+  },
+  "channel_vendor_q": {
+    "Trade Show": {
+      "Kenneth Mark Blount Ramp": {
+        "Q2 2025": 15614.0,
+        "Q1 2025": 16839.0,
+        "Q3 2025": 5133.0
+      },
+      "Eleventh & Gather": {
+        "Q1 2025": 899.0,
+        "Q1 2026": 535.0,
+        "Q3 2025": 836.0
+      },
+      "BestBuy - US": {
+        "Q1 2026": 970.0
+      },
+      "Trevor Macon": {
+        "Q1 2026": 26068.0,
+        "Q4 2025": 13190.0
+      },
+      "Allie Hafliger Ramp": {
+        "Q4 2025": 14196.0,
+        "Q1 2026": 565.0,
+        "Q2 2025": 163.0,
+        "Q3 2025": 199.0
+      },
+      "Walgreens": {
+        "Q1 2026": 112.0
+      },
+      "The UPS Store": {
+        "Q1 2025": 46.0,
+        "Q2 2025": 40.0
+      },
+      "Victoria Lane Ramp": {
+        "Q1 2025": 1514.0,
+        "Q3 2025": 36.0,
+        "Q1 2026": 369.0
+      },
+      "Halle Eicher Ramp": {
+        "Q1 2025": 971.0,
+        "Q3 2025": 422.0,
+        "Q1 2026": 227.0
+      },
+      "Monica Cody Clark Ramp": {
+        "Q3 2025": 441.0,
+        "Q1 2025": 663.0
+      },
+      "Sarah Lamb Ramp": {
+        "Q1 2025": 1292.0,
+        "Q2 2025": 1680.0,
+        "Q3 2025": 75.0
+      },
+      "Carlson Chiles Ramp": {
+        "Q2 2025": 2044.0,
+        "Q1 2025": 733.0
+      },
+      "Hotel-Misc (US)": {
+        "Q1 2025": 33527.0,
+        "Q2 2025": 12309.0,
+        "Q3 2025": 29863.0,
+        "Q4 2025": 24461.0,
+        "Q1 2026": 27801.0
+      },
+      "Delta Air Lines": {
+        "Q1 2025": 23130.0,
+        "Q2 2025": 8357.0,
+        "Q3 2025": 16784.0,
+        "Q4 2025": 12132.0,
+        "Q1 2026": 20051.0
+      },
+      "Gregory Wu DMD": {
+        "Q2 2025": 22003.0,
+        "Q3 2025": 14822.0,
+        "Q4 2025": 16603.0,
+        "Q1 2026": 32885.0,
+        "Q1 2025": 3255.0
+      },
+      "Gary Long Ramp": {
+        "Q1 2025": 7299.0,
+        "Q2 2025": 10136.0,
+        "Q3 2025": 2655.0,
+        "Q1 2026": 3461.0
+      },
+      "Sean Gove Ramp": {
+        "Q3 2025": 5552.0,
+        "Q4 2025": 7070.0,
+        "Q1 2026": 90.0
+      },
+      "Jake Weber Ramp": {
+        "Q1 2025": 547.0,
+        "Q2 2025": 1369.0,
+        "Q3 2025": 2312.0,
+        "Q4 2025": 2171.0,
+        "Q1 2026": 2081.0
+      },
+      "United Airlines": {
+        "Q2 2025": 193.0,
+        "Q3 2025": 2816.0,
+        "Q4 2025": 1853.0,
+        "Q1 2026": 2457.0
+      },
+      "Jana Macon Ramp": {
+        "Q3 2025": 819.0,
+        "Q4 2025": 2547.0,
+        "Q1 2026": 3270.0,
+        "Q2 2025": 90.0
+      },
+      "Shahrzad Nadizadeh Ramp": {
+        "Q1 2025": 3138.0,
+        "Q2 2025": 522.0,
+        "Q3 2025": 600.0,
+        "Q1 2026": 1299.0
+      },
+      "American Airlines": {
+        "Q2 2025": 562.0,
+        "Q3 2025": 745.0,
+        "Q4 2025": 717.0,
+        "Q1 2026": 2683.0
+      },
+      "Southwest Airlines": {
+        "Q2 2025": 565.0,
+        "Q3 2025": 670.0,
+        "Q4 2025": 1505.0,
+        "Q1 2026": 1935.0
+      },
+      "Guestrs Hotel": {
+        "Q1 2026": 4438.0
+      },
+      "Hanna Brittain Ramp": {
+        "Q1 2025": 2009.0,
+        "Q2 2025": 1605.0,
+        "Q3 2025": 1173.0
+      },
+      "Scott Poitevent Ramp": {
+        "Q1 2025": 1489.0,
+        "Q3 2025": 937.0,
+        "Q4 2025": 554.0
+      },
+      "Ashleigh Culpepper Ramp": {
+        "Q4 2025": 1371.0,
+        "Q1 2026": 1525.0,
+        "Q3 2025": 104.0
+      },
+      "Julia Duncan Ramp": {
+        "Q3 2025": 2040.0,
+        "Q1 2026": 2060.0,
+        "Q1 2025": 171.0,
+        "Q4 2025": 327.0
+      },
+      "Trade Show Planners Ll": {
+        "Q1 2026": 6345.0,
+        "Q4 2025": 3966.0
+      },
+      "Andrew Ward Ramp": {
+        "Q1 2025": 2047.0
+      },
+      "Suzanne Henderson Ramp": {
+        "Q1 2026": 2003.0
+      },
+      "Travis Grawey Ramp": {
+        "Q1 2026": 1764.0
+      },
+      "Shannon Murry Ramp": {
+        "Q1 2025": 922.0,
+        "Q3 2025": 852.0,
+        "Q2 2025": 158.0
+      },
+      "Brandon Savage Ramp": {
+        "Q1 2026": 1237.0
+      },
+      "Marvin Brown Ramp": {
+        "Q1 2025": 350.0,
+        "Q2 2025": 1114.0,
+        "Q1 2026": 491.0,
+        "Q3 2025": 166.0,
+        "Q4 2025": 287.0
+      },
+      "Trysta Napper Ramp": {
+        "Q1 2025": 874.0,
+        "Q3 2025": 736.0,
+        "Q1 2026": 178.0
+      },
+      "Big Cedar Lodge": {
+        "Q3 2025": 980.0
+      },
+      "Megan Smith Ramp": {
+        "Q4 2025": 873.0
+      },
+      "Tyler McComas Ramp": {
+        "Q1 2026": 867.0
+      },
+      "Restaurant-Misc": {
+        "Q1 2025": 6746.0,
+        "Q2 2025": 6167.0,
+        "Q3 2025": 10313.0,
+        "Q4 2025": 8744.0,
+        "Q1 2026": 24793.0
+      },
+      "Eric Dawe Ramp": {
+        "Q4 2025": 807.0
+      },
+      "Katie May Ramp": {
+        "Q1 2026": 692.0
+      },
+      "Jonlee Anderson Ramp": {
+        "Q1 2025": 474.0,
+        "Q2 2025": 386.0,
+        "Q3 2025": 46.0
+      },
+      "Bowen Riddle Ramp": {
+        "Q2 2025": 461.0
+      },
+      "Robin Bowling Ramp": {
+        "Q2 2025": 935.0,
+        "Q3 2025": 313.0,
+        "Q4 2025": 110.0,
+        "Q1 2026": 173.0
+      },
+      "Expo Housing Management L": {
+        "Q4 2025": 431.0
+      },
+      "Dmitriy Zinger Ramp": {
+        "Q1 2025": 416.0
+      },
+      "Jason Anderson Ramp": {
+        "Q3 2025": 378.0
+      },
+      "Jonathan Booher Ramp": {
+        "Q3 2025": 567.0
+      },
+      "trpts.me": {
+        "Q1 2025": 52.0,
+        "Q1 2026": 192.0
+      },
+      "Kennedy kennedy.dalsing@curvedental Ramp": {
+        "Q1 2026": 533.0
+      },
+      "Vendor-Misc (US)": {
+        "Q1 2025": 512.0,
+        "Q4 2025": 141.0,
+        "Q3 2025": 221.0,
+        "Q1 2026": 507.0,
+        "Q2 2025": 65.0
+      },
+      "Summer Shack": {
+        "Q2 2025": 229.0
+      },
+      "Brian Syphoe Ramp": {
+        "Q1 2025": 136.0
+      },
+      "Rocky Mountain Chocolate Factory": {
+        "Q4 2025": 97.0
+      },
+      "CrystalPlus.com": {
+        "Q1 2025": 84.0
+      },
+      "Clinton": {
+        "Q1 2026": 80.0
+      },
+      "Air Canada": {
+        "Q3 2025": 67.0
+      },
+      "Amazon.com - US": {
+        "Q1 2025": 57.0,
+        "Q2 2025": 300.0,
+        "Q3 2025": 976.0,
+        "Q1 2026": 943.0
+      },
+      "Aa Kiosk": {
+        "Q2 2025": 40.0
+      },
+      "Albertsons Market": {
+        "Q1 2026": 20.0
+      },
+      "Travel Right": {
+        "Q4 2025": 20.0
+      },
+      "Southernlivingst2691": {
+        "Q4 2025": 15.0
+      },
+      "Fry's Food Stores": {
+        "Q1 2026": 14.0
+      },
+      "Evolve By Hudson": {
+        "Q4 2025": 13.0,
+        "Q1 2026": 6.0
+      },
+      "ChurroStar": {
+        "Q4 2025": 13.0
+      },
+      "3266 Sat Adina'S Market": {
+        "Q4 2025": 10.0
+      },
+      "Tripadvisor": {
+        "Q4 2025": 8.0,
+        "Q1 2026": 7.0
+      },
+      "Sam's Club": {
+        "Q2 2025": 1419.0,
+        "Q4 2025": 269.0
+      },
+      "Harry & David": {
+        "Q4 2025": 447.0,
+        "Q1 2026": 296.0
+      },
+      "Vet Together": {
+        "Q4 2025": 500.0
+      },
+      "Society": {
+        "Q1 2026": 461.0
+      },
+      "Payless Foods": {
+        "Q1 2026": 370.0
+      },
+      "Publix": {
+        "Q1 2025": 54.0,
+        "Q2 2025": 41.0,
+        "Q3 2025": 30.0,
+        "Q4 2025": 206.0,
+        "Q1 2026": 19.0
+      },
+      "Fandango": {
+        "Q2 2025": 253.0
+      },
+      "Jeff Beck Ramp": {
+        "Q2 2025": 436.0
+      },
+      "McCormick Place": {
+        "Q1 2025": 1769.0,
+        "Q1 2026": 5710.0
+      },
+      "Table Covers": {
+        "Q1 2026": 765.0
+      },
+      "Hudson News": {
+        "Q2 2025": 19.0,
+        "Q3 2025": 26.0,
+        "Q4 2025": 22.0,
+        "Q1 2026": 93.0
+      },
+      "Hugman's Oasis": {
+        "Q4 2025": 154.0
+      },
+      "Camryn Banks Ramp": {
+        "Q1 2026": 278.0
+      },
+      "Vail Wine Shop & Tasting Room": {
+        "Q1 2026": 115.0
+      },
+      "Amira Hammond Ramp": {
+        "Q2 2025": 218.0,
+        "Q1 2025": 133.0
+      },
+      "LOOK Dine-In Cinemas": {
+        "Q2 2025": 85.0
+      },
+      "Savi Provisions": {
+        "Q2 2025": 57.0,
+        "Q3 2025": 20.0
+      },
+      "Boston": {
+        "Q3 2025": 29.0,
+        "Q1 2026": 34.0
+      },
+      "wsdot": {
+        "Q1 2026": 63.0
+      },
+      "Brandon Cluff Ramp": {
+        "Q1 2026": 149.0
+      },
+      "Squeezed": {
+        "Q1 2026": 57.0
+      },
+      "Lance Robinson Ramp": {
+        "Q1 2025": 336.0
+      },
+      "Josh Edenfield Ramp": {
+        "Q1 2025": 55.0
+      },
+      "COLORADO CONVETION CENTER": {
+        "Q1 2026": 482.0,
+        "Q2 2025": 155.0,
+        "Q4 2025": 260.0
+      },
+      "Jackson Lettich Ramp": {
+        "Q1 2026": 145.0
+      },
+      "High Dunes": {
+        "Q3 2025": 27.0
+      },
+      "Instacart": {
+        "Q3 2025": 24.0
+      },
+      "Evolve": {
+        "Q1 2026": 22.0
+      },
+      "Paradies Lagardere - CLT": {
+        "Q1 2026": 18.0
+      },
+      "Piroshky Piroshky": {
+        "Q1 2026": 18.0
+      },
+      "Slate Market": {
+        "Q1 2026": 17.0
+      },
+      "3269 Sat Stars Of San": {
+        "Q4 2025": 3.0,
+        "Q1 2026": 13.0
+      },
+      "Julia Smith Ramp": {
+        "Q3 2025": 76.0
+      },
+      "San Antonio Gelato": {
+        "Q4 2025": 16.0
+      },
+      "TouchTunes": {
+        "Q4 2025": 15.0
+      },
+      "The Brick Room": {
+        "Q3 2025": 15.0
+      },
+      "Atlanta Daily Worl": {
+        "Q4 2025": 13.0
+      },
+      "Chateau Elan Winery & Resort": {
+        "Q3 2025": 12.0
+      },
+      "Bam Bam": {
+        "Q3 2025": 11.0
+      },
+      "Asters Patisserie": {
+        "Q3 2025": 11.0
+      },
+      "Your Business Center": {
+        "Q1 2026": 11.0
+      },
+      "Sky Market": {
+        "Q4 2025": 10.0
+      },
+      "Cibo Express": {
+        "Q4 2025": 9.0
+      },
+      "Centralpointemkt": {
+        "Q4 2025": 9.0
+      },
+      "Deseret News": {
+        "Q1 2026": 9.0
+      },
+      "Motown Greatest Hits": {
+        "Q1 2026": 8.0
+      },
+      "Hartsfield-Jackson Atlanta International Airport": {
+        "Q1 2025": 257.0,
+        "Q2 2025": 297.0,
+        "Q3 2025": 960.0,
+        "Q1 2026": 610.0
+      },
+      "City Market Coffee": {
+        "Q2 2025": 8.0
+      },
+      "Chateau Elan": {
+        "Q3 2025": 8.0
+      },
+      "Piedmont Park": {
+        "Q1 2025": 8.0
+      },
+      "Kansas City": {
+        "Q2 2025": 7.0
+      },
+      "Bodega Den": {
+        "Q4 2025": 7.0
+      },
+      "11alive": {
+        "Q2 2025": 7.0
+      },
+      "Rhino Market & Deli": {
+        "Q3 2025": 7.0
+      },
+      "Amazon Fresh": {
+        "Q1 2026": 6.0
+      },
+      "Longo's": {
+        "Q3 2025": 6.0
+      },
+      "District News": {
+        "Q4 2025": 6.0
+      },
+      "Southern Connector": {
+        "Q3 2025": 5.0
+      },
+      "oxxo": {
+        "Q1 2026": 4.0
+      },
+      "Duke City Art & Frame": {
+        "Q1 2026": 3.0
+      },
+      "CIBO Express Gourmet Market": {
+        "Q3 2025": 3.0
+      },
+      "Red Sail Sports": {
+        "Q1 2025": 237.0,
+        "Q3 2025": -237.0
+      },
+      "(No vendor \u2014 journal/payroll/accrual)": {
+        "Q1 2025": 75280.0,
+        "Q2 2025": 29856.0,
+        "Q4 2025": 29020.0,
+        "Q1 2026": 51501.0,
+        "Q3 2025": 31874.0
+      },
+      "Uber": {
+        "Q1 2025": 496.0,
+        "Q2 2025": 537.0,
+        "Q3 2025": 1438.0,
+        "Q4 2025": 1984.0,
+        "Q1 2026": 1974.0
+      },
+      "Massachusetts Convention Center Authority": {
+        "Q1 2026": 1215.0,
+        "Q1 2025": 1780.0
+      },
+      "SLC Airport Parking": {
+        "Q4 2025": 760.0
+      },
+      "The Fractional Match LLC (Cassie Tallon)": {
+        "Q3 2025": 3461.0,
+        "Q4 2025": 125.0
+      },
+      "Chantelle Camareno Ramp": {
+        "Q3 2025": 424.0,
+        "Q1 2026": 68.0
+      },
+      "ROYAL TAXI": {
+        "Q1 2026": 288.0
+      },
+      "Charleston Co Parking": {
+        "Q2 2025": 84.0,
+        "Q3 2025": 24.0,
+        "Q1 2026": 136.0
+      },
+      "National Car Rental": {
+        "Q4 2025": 500.0,
+        "Q1 2026": 531.0
+      },
+      "Atlanta Airport": {
+        "Q3 2025": 90.0,
+        "Q1 2026": 120.0
+      },
+      "Limoisine Driver": {
+        "Q3 2025": 132.0
+      },
+      "Atlanta": {
+        "Q1 2025": 99.0
+      },
+      "The Parking Spot": {
+        "Q1 2026": 86.0
+      },
+      "Peachy Airport Parking": {
+        "Q3 2025": 66.0
+      },
+      "Maddie Radivonik Ramp": {
+        "Q1 2025": 51.0
+      },
+      "Dan Westmoreland Ramp": {
+        "Q3 2025": 42.0
+      },
+      "Taxi": {
+        "Q4 2025": 41.0
+      },
+      "Tez Safewayprkgsundiallot": {
+        "Q4 2025": 33.0
+      },
+      "Premium Parking": {
+        "Q1 2026": 29.0
+      },
+      "Domingo Taxi": {
+        "Q1 2026": 20.0
+      },
+      "Clinton National Airport LIT": {
+        "Q3 2025": 11.0
+      },
+      "Three D Development": {
+        "Q4 2025": 5.0
+      },
+      "CNBC Stores": {
+        "Q4 2025": 5.0
+      },
+      "SFMTA": {
+        "Q1 2026": 3.0
+      },
+      "Seattle Meter Parking": {
+        "Q1 2026": 3.0
+      },
+      "Lyft": {
+        "Q1 2025": 904.0,
+        "Q2 2025": 382.0,
+        "Q3 2025": 459.0,
+        "Q4 2025": 5.0,
+        "Q1 2026": 79.0
+      },
+      "Alamo": {
+        "Q3 2025": 473.0
+      },
+      "Hertz": {
+        "Q1 2026": 345.0
+      },
+      "Kristie Dame Ramp": {
+        "Q1 2025": 65.0,
+        "Q3 2025": 231.0
+      },
+      "LeAnn Scott Ramp": {
+        "Q2 2025": 141.0
+      },
+      "Strategic Conferences & Events": {
+        "Q2 2025": 6393.0
+      },
+      "Sticker Mule": {
+        "Q1 2026": 488.0
+      },
+      "Smartpress": {
+        "Q1 2026": 4767.0
+      },
+      "Breakaway Practice LLC": {
+        "Q1 2025": 15000.0
+      },
+      "Parking": {
+        "Q1 2026": 11.0
+      },
+      "Stock Supply LLC": {
+        "Q1 2025": 5100.0,
+        "Q4 2025": 19800.0
+      },
+      "Minuteman Press Suwanee A Division of Diversified Printing Solutions Inc.": {
+        "Q1 2025": 2677.0,
+        "Q2 2025": 1908.0,
+        "Q3 2025": 2084.0,
+        "Q4 2025": 3088.0,
+        "Q1 2026": 1657.0
+      },
+      "Dr. Scott Leune": {
+        "Q1 2025": 24999.0,
+        "Q2 2025": 24999.0,
+        "Q3 2025": 24999.0,
+        "Q4 2025": 24999.0,
+        "Q1 2026": 31248.0
+      },
+      "Florida Dental": {
+        "Q2 2025": 400.0,
+        "Q1 2026": 3199.0
+      },
+      "Clear Coaching Ltd.": {
+        "Q1 2025": 1500.0,
+        "Q2 2025": 1515.0,
+        "Q3 2025": 1500.0,
+        "Q4 2025": 1500.0
+      },
+      "Crown Council": {
+        "Q4 2025": 5643.0
+      },
+      "Dental Boards Ace": {
+        "Q2 2025": 1190.0,
+        "Q4 2025": 3000.0,
+        "Q1 2025": 599.0
+      },
+      "UMKC Dental Alumni": {
+        "Q1 2025": 1400.0,
+        "Q1 2026": 1500.0
+      },
+      "Freeman": {
+        "Q4 2025": 13136.0,
+        "Q1 2025": 16330.0,
+        "Q2 2025": 7218.0,
+        "Q3 2025": 2529.0,
+        "Q1 2026": 17172.0
+      },
+      "AAP": {
+        "Q1 2025": 2520.0,
+        "Q2 2025": 150.0
+      },
+      "Shepard Exposition Services Inc": {
+        "Q3 2025": 2407.0
+      },
+      "American Academy of Dental Practice Administration": {
+        "Q1 2025": 1895.0
+      },
+      "Carla Cohn": {
+        "Q1 2025": 1000.0,
+        "Q2 2025": 500.0
+      },
+      "Greater Atlanta Dental Foundation": {
+        "Q1 2025": 1200.0
+      },
+      "Oregon Convention Center": {
+        "Q1 2026": 1166.0
+      },
+      "Eventbrite": {
+        "Q2 2025": 1097.0
+      },
+      "Connecticut State Dental Association": {
+        "Q1 2025": 1000.0,
+        "Q2 2025": 120.0
+      },
+      "Connecticut Society Of": {
+        "Q1 2025": 1000.0
+      },
+      "EFFECTIVE DENTISTRY": {
+        "Q1 2026": 1000.0
+      },
+      "Dallas County Dental Society": {
+        "Q1 2025": 900.0
+      },
+      "Atlanta Dental Supply": {
+        "Q3 2025": 875.0
+      },
+      "Ontario Dental Association": {
+        "Q4 2025": 835.0
+      },
+      "Convention Data Services": {
+        "Q1 2025": 764.0
+      },
+      "MidwestDental": {
+        "Q1 2026": 600.0
+      },
+      "Smile Source": {
+        "Q3 2025": 500.0,
+        "Q2 2025": 9000.0,
+        "Q1 2026": 1000.0
+      },
+      "Gift Card": {
+        "Q4 2025": 500.0
+      },
+      "National Denturist Association": {
+        "Q4 2025": 194.0
+      },
+      "Fedex": {
+        "Q3 2025": 135.0
+      },
+      "Lidl": {
+        "Q4 2025": 18.0
+      },
+      "KAESER BLAIR INCORPORATED": {
+        "Q2 2025": 867.0,
+        "Q3 2025": 12782.0,
+        "Q4 2025": 27155.0,
+        "Q1 2026": 83421.0
+      },
+      "Exhibits South": {
+        "Q1 2025": 6397.0,
+        "Q2 2025": 24636.0,
+        "Q3 2025": 23951.0,
+        "Q4 2025": 32366.0,
+        "Q1 2026": 25520.0
+      },
+      "Halo Branded Solutions": {
+        "Q1 2025": 43674.0,
+        "Q2 2025": 16035.0,
+        "Q3 2025": 2673.0
+      },
+      "Expoprep": {
+        "Q4 2025": 12856.0
+      },
+      "Metro Denver Dental Society": {
+        "Q4 2025": 8300.0,
+        "Q1 2026": 1500.0
+      },
+      "Hinman Dental Society": {
+        "Q1 2026": 9600.0
+      },
+      "Aramark Services, Inc": {
+        "Q4 2025": 9331.0
+      },
+      "Washington State Denta": {
+        "Q1 2026": 8470.0
+      },
+      "Seattle Convention Center": {
+        "Q1 2026": 8043.0
+      },
+      "Sodexo Live!": {
+        "Q1 2026": 7615.0
+      },
+      "JW Marriott Camelback Inn": {
+        "Q1 2026": 7361.0
+      },
+      "Jack Nadel International": {
+        "Q1 2026": 6992.0
+      },
+      "Ags Expo": {
+        "Q1 2025": 6639.0,
+        "Q2 2025": 88.0
+      },
+      "GES": {
+        "Q1 2025": 2776.0,
+        "Q2 2025": 1694.0
+      },
+      "PSAV": {
+        "Q1 2025": 2855.0,
+        "Q2 2025": 996.0,
+        "Q3 2025": 134.0
+      },
+      "Fern Expo": {
+        "Q1 2025": 1118.0,
+        "Q2 2025": 485.0,
+        "Q1 2026": 1795.0
+      },
+      "Virtual Dontics": {
+        "Q1 2025": 3100.0
+      },
+      "Tory Burch": {
+        "Q4 2025": 1882.0,
+        "Q1 2026": 1289.0,
+        "Q3 2025": 596.0
+      },
+      "1201AM CREATIVE, LLC": {
+        "Q4 2025": 2800.0
+      },
+      "Aadom": {
+        "Q3 2025": 2500.0
+      },
+      "EDI Health Group": {
+        "Q3 2025": 2500.0
+      },
+      "Dental Medical Billing": {
+        "Q4 2025": 2500.0
+      },
+      "Prg": {
+        "Q1 2025": 1502.0,
+        "Q4 2025": 884.0
+      },
+      "Don Ross Nabb Production Companies": {
+        "Q2 2025": 2100.0
+      },
+      "Maritz Global Events": {
+        "Q2 2025": 484.0,
+        "Q1 2026": 1345.0
+      },
+      "ASN, INC": {
+        "Q1 2025": 1632.0
+      },
+      "Ccld": {
+        "Q1 2025": 1574.0
+      },
+      "Demers Exposition Services": {
+        "Q2 2025": 1281.0
+      },
+      "MARITZ": {
+        "Q1 2025": 615.0,
+        "Q4 2025": 635.0
+      },
+      "Advanced Tradeshow Technology": {
+        "Q1 2025": 1250.0
+      },
+      "Opportunityretreiv": {
+        "Q1 2026": 1225.0
+      },
+      "Chicago Dental Society": {
+        "Q1 2026": 1196.0
+      },
+      "Colleen Huff": {
+        "Q3 2025": 1000.0
+      },
+      "projection.com": {
+        "Q2 2025": 963.0
+      },
+      "Spectrum Audio Visual": {
+        "Q4 2025": 856.0
+      },
+      "OPTEL TECHNOLOGY LLC": {
+        "Q1 2026": 800.0
+      },
+      "Custom Registration": {
+        "Q1 2025": 700.0
+      },
+      "A-1 Rentals": {
+        "Q3 2025": 510.0
+      },
+      "Mid-Continent Dental Congress": {
+        "Q3 2025": 500.0
+      },
+      "Greater St. Louis Dental Society": {
+        "Q4 2025": 500.0
+      },
+      "Jp Display": {
+        "Q1 2025": 402.0
+      },
+      "Production company": {
+        "Q1 2025": 400.0
+      },
+      "TRENDY REP GROUP INC": {
+        "Q1 2025": 390.0
+      },
+      "ARPA-E": {
+        "Q2 2025": 385.0
+      },
+      "TRADESHOW MULTIMEDIA INC": {
+        "Q2 2025": 330.0
+      },
+      "OfficeSignCompany": {
+        "Q1 2026": 293.0
+      },
+      "Displays2go": {
+        "Q1 2026": 196.0
+      },
+      "Hollister": {
+        "Q4 2025": 191.0
+      },
+      "Edlen Electrical Exhibition Services": {
+        "Q1 2025": 161.0
+      },
+      "Wscc Pfd": {
+        "Q1 2025": 160.0
+      },
+      "Joy Displays": {
+        "Q1 2025": 139.0,
+        "Q2 2025": 20.0
+      },
+      "B&H Photo": {
+        "Q3 2025": 149.0
+      },
+      "PlatePass": {
+        "Q3 2025": 104.0
+      },
+      "Spotify Ad Studio": {
+        "Q4 2025": 25.0
+      }
+    }
+  },
+  "quarters": [
+    "Q1 2025",
+    "Q2 2025",
+    "Q3 2025",
+    "Q4 2025",
+    "Q1 2026"
+  ],
+  "channels": [
+    "Trade Show"
+  ]
+}

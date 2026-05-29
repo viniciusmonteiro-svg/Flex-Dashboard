@@ -22,11 +22,20 @@ function parseExcelDate(raw: unknown): string | null {
     }
   }
 
-  // MM/DD/YYYY or M/D/YYYY
+  // MM/DD/YYYY or M/D/YYYY (4-digit year)
   const mdyMatch = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
   if (mdyMatch) {
     const [, m, d, y] = mdyMatch;
     return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+
+  // M/D/YY or MM/DD/YY (2-digit year — Salesforce XLS export uses this format)
+  const mdyShortMatch = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/);
+  if (mdyShortMatch) {
+    const [, m, d, yy] = mdyShortMatch;
+    // Y2K pivot: 00–69 → 2000s, 70–99 → 1900s
+    const fullYear = parseInt(yy) < 70 ? 2000 + parseInt(yy) : 1900 + parseInt(yy);
+    return `${fullYear}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
   }
 
   // YYYY-MM-DD
@@ -60,16 +69,24 @@ export const salesforceLeads: SourceDefinition<SalesforceRow> = {
     'Account Name',
     'Created Date',
     'Stage',
-    'Opportunity ID',
   ],
 
   parseRows(rows): SalesforceRow[] {
     return rows
       .map((row) => {
-        // Cast to unknown first since XLSX may return numbers for date/numeric cells
-        const r = row as unknown as Record<string, unknown>;
+        // Cast to unknown first since XLSX may return numbers for date/numeric cells.
+        // Also build a whitespace-trimmed key map so headers like "Order Type "
+        // (trailing space) are resolved correctly.
+        const rawRow = row as unknown as Record<string, unknown>;
+        const r: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(rawRow)) {
+          r[k.trim()] = v;        // trim header key; value trimming done per-field
+        }
 
-        const opportunityId = String(r['Opportunity ID'] ?? '').trim();
+        // Opportunity ID may be absent in newer exports — fall back to Opportunity Name
+        const opportunityId =
+          String(r['Opportunity ID'] ?? '').trim() ||
+          String(r['Opportunity Name'] ?? '').trim();
         if (!opportunityId) return null;
 
         const createdDate = parseExcelDate(r['Created Date']);
@@ -79,6 +96,15 @@ export const salesforceLeads: SourceDefinition<SalesforceRow> = {
         const rawChannel = String(r['Primary Channel'] ?? '').trim();
         const primaryChannel = !rawChannel || rawChannel === '0' ? 'Unclassified' : rawChannel;
 
+        const rawDemoed = r['Demoed'];
+        const demoed =
+          rawDemoed === 1 || rawDemoed === '1' ||
+          rawDemoed === true || rawDemoed === 'true' ||
+          String(rawDemoed ?? '').toLowerCase() === 'yes';
+
+        // MRR column was renamed from "Monthly MRR (converted)" to "Total MRR (converted)"
+        const rawMrr = (r['Total MRR (converted)'] ?? r['Monthly MRR (converted)']) as string;
+
         return {
           opportunity_id: opportunityId,
           opportunity_name: String(r['Opportunity Name'] ?? '').trim(),
@@ -86,14 +112,17 @@ export const salesforceLeads: SourceDefinition<SalesforceRow> = {
           created_date: createdDate,
           close_date: closeDate,
           stage: String(r['Stage'] ?? '').trim(),
-          monthly_mrr: parseMrr(r['Monthly MRR (converted)'] as string),
+          monthly_mrr: parseMrr(rawMrr),
           number_of_locations: parseInt(String(r['NUMBER OF LOCATIONS'] ?? '0')) || 0,
           primary_channel: primaryChannel,
           primary_campaign_source: String(r['Primary Campaign Source'] ?? '').trim(),
+          primary_campaign_name: String(r['Primary Campaign Name'] ?? '').trim() || null,
           lead_source: String(r['Lead Source'] ?? '').trim(),
           opportunity_owner: String(r['Opportunity Owner'] ?? '').trim(),
           opp_type: String(r['Type'] ?? '').trim(),
           created_month: createdMonth,
+          demoed,
+          order_type: String(r['Order Type'] ?? '').trim(),
         } satisfies SalesforceRow;
       })
       .filter((r): r is SalesforceRow => r !== null);

@@ -33,9 +33,12 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const channelParam  = searchParams.get('channel')      || 'all';
+    const periodType    = searchParams.get('period_type')  || 'transaction';
+    // from/to are preferred; year/month_key kept for backwards-compat
+    const fromParam     = searchParams.get('from')         || null;
+    const toParam       = searchParams.get('to')           || null;
     const yearParam     = searchParams.get('year')         || 'all';
     const monthKeyParam = searchParams.get('month_key')    || null;
-    const periodType    = searchParams.get('period_type')  || 'transaction';
 
     const isAllChannels = !channelParam || channelParam === 'all';
     const yearFilter    = yearParam && yearParam !== 'all' ? yearParam : null;
@@ -50,18 +53,30 @@ export async function GET(req: NextRequest) {
 
     if (isAllChannels) {
       conditions.push(`${CHANNEL_EXPR} NOT IN ${EXCLUDED}`);
+    } else if (channelParam === 'Referral/Partner') {
+      conditions.push(`${CHANNEL_EXPR} IN ('Referral', 'Partner')`);
     } else {
       params.push(channelParam);
       conditions.push(`${CHANNEL_EXPR} = $${params.length}`);
     }
 
-    // Period-aware filtering: apply the same PERIOD expression to year/month filters
-    if (monthKeyParam) {
-      params.push(monthKeyParam);
-      conditions.push(`${PERIOD} = $${params.length}`);
-    } else if (yearFilter) {
-      params.push(yearFilter);
-      conditions.push(`LEFT(${PERIOD}, 4) = $${params.length}`);
+    // Period-aware filtering
+    if (fromParam) {
+      params.push(fromParam);
+      conditions.push(`${PERIOD} >= $${params.length}`);
+    }
+    if (toParam) {
+      params.push(toParam);
+      conditions.push(`${PERIOD} <= $${params.length}`);
+    }
+    if (!fromParam && !toParam) {
+      if (monthKeyParam) {
+        params.push(monthKeyParam);
+        conditions.push(`${PERIOD} = $${params.length}`);
+      } else if (yearFilter) {
+        params.push(yearFilter);
+        conditions.push(`LEFT(${PERIOD}, 4) = $${params.length}`);
+      }
     }
 
     const whereClause   = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';

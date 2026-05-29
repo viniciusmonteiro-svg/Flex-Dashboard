@@ -1,0 +1,8 @@
+.next/types/validator.ts(62,39): error TS2307: Cannot find module '../../src/app/channel-breakdown/page.js' or its corresponding type declarations.
+.next/types/validator.ts(71,39): error TS2307: Cannot find module '../../src/app/channel-detail/page.js' or its corresponding type declarations.
+.next/types/validator.ts(134,39): error TS2307: Cannot find module '../../src/app/api/channel-breakdown/spend/route.js' or its corresponding type declarations.
+.next/types/validator.ts(143,39): error TS2307: Cannot find module '../../src/app/api/channel-detail/months/route.js' or its corresponding type declarations.
+.next/types/validator.ts(152,39): error TS2307: Cannot find module '../../src/app/api/channel-detail/route.js' or its corresponding type declarations.
+═══════════════════════════════════════
+TypeScript: 5 errors in 1 files
+[full output: ~/AppData\Local\rtk\tee\1779727808_tsc.log]

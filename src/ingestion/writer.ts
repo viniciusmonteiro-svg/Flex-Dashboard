@@ -63,12 +63,17 @@ function aggregateNetsuiteRows(rows: NetsuiteRow[]): NetsuiteRow[] {
   const map = new Map<string, NetsuiteRow>();
 
   for (const row of rows) {
-    const key = `${row.month_key}|${row.financial_row}|${row.entity_name}`;
+    // Key includes tx_month so that cross-period entries (e.g. Sep 30 expense
+    // inside the Oct accounting file) are kept as a separate DB row from the
+    // same vendor's October transactions, enabling correct Transaction Date filtering.
+    const key = `${row.month_key}|${row.financial_row}|${row.entity_name}|${row.tx_month}`;
     const existing = map.get(key);
     if (!existing) {
       map.set(key, { ...row });
     } else {
       existing.amount += row.amount;
+      // has_name: true if ANY row in the group had a real name
+      if (row.has_name) existing.has_name = true;
       // Keep last non-null value for metadata fields
       if (row.transaction_date  != null) existing.transaction_date  = row.transaction_date;
       if (row.accounting_period != null) existing.accounting_period = row.accounting_period;
@@ -79,27 +84,29 @@ function aggregateNetsuiteRows(rows: NetsuiteRow[]): NetsuiteRow[] {
   return [...map.values()];
 }
 
-// 8 columns per row → batch 500 rows = 4 000 params (well under the 65 535 limit)
+// 10 columns per row → batch 450 rows = 4 500 params (well under the 65 535 limit)
 export async function upsertNetsuiteActuals(rows: NetsuiteRow[]): Promise<void> {
   const deduped = aggregateNetsuiteRows(rows);
   await runBatches(
     deduped,
-    500,
-    8,
+    450,
+    10,
     (r) => [
-      r.source, r.month_key, r.financial_row, r.entity_name, r.amount,
+      r.source, r.month_key, r.financial_row, r.entity_name, r.has_name,
+      r.tx_month,
+      r.amount,
       r.transaction_date  ?? null,
       r.accounting_period ?? null,
       r.description       ?? null,
     ],
     (values) => `
       INSERT INTO netsuite_actuals
-        (source, month_key, financial_row, entity_name, amount,
-         transaction_date, accounting_period, description)
+        (source, month_key, financial_row, entity_name, has_name,
+         tx_month, amount, transaction_date, accounting_period, description)
       VALUES ${values}
-      ON CONFLICT (month_key, financial_row, entity_name) DO UPDATE SET
+      ON CONFLICT ON CONSTRAINT netsuite_actuals_unique_tx DO UPDATE SET
+        has_name          = EXCLUDED.has_name,
         amount            = EXCLUDED.amount,
-        transaction_date  = EXCLUDED.transaction_date,
         accounting_period = EXCLUDED.accounting_period,
         description       = EXCLUDED.description,
         ingested_at       = NOW()`
@@ -131,32 +138,73 @@ export async function upsertLeads(rows: MarketingLeadsRow[]): Promise<void> {
   );
 }
 
-// 14 columns per row → batch 400 rows = 5 600 params
+/**
+ * Deduplicate Salesforce rows by opportunity_id.
+ * When Opportunity ID is absent the parser falls back to Opportunity Name, so
+ * duplicate names in the source file produce the same key. Keep the last occurrence.
+ */
+function aggregateSalesforceRows(rows: SalesforceRow[]): SalesforceRow[] {
+  const map = new Map<string, SalesforceRow>();
+  for (const row of rows) {
+    map.set(row.opportunity_id, row);
+  }
+  return [...map.values()];
+}
+
+// 17 columns per row → batch 250 rows = 4 250 params (well under the 65 535 limit)
 export async function upsertOpportunities(rows: SalesforceRow[]): Promise<void> {
+  const deduped = aggregateSalesforceRows(rows);
   await runBatches(
-    rows,
-    400,
-    14,
+    deduped,
+    250,
+    17,
     (r) => [
       r.opportunity_id, r.opportunity_name, r.account_name,
       r.created_date, r.close_date, r.stage, r.monthly_mrr,
       r.number_of_locations, r.primary_channel, r.primary_campaign_source,
       r.lead_source, r.opportunity_owner, r.opp_type, r.created_month,
+      r.demoed, r.order_type, r.primary_campaign_name ?? null,
     ],
     (values) => `
       INSERT INTO salesforce_opportunities
         (opportunity_id, opportunity_name, account_name, created_date, close_date,
          stage, monthly_mrr, number_of_locations, primary_channel,
          primary_campaign_source, lead_source, opportunity_owner, opp_type,
-         created_month)
+         created_month, demoed, order_type, primary_campaign_name)
       VALUES ${values}
       ON CONFLICT (opportunity_id) DO UPDATE SET
+        opportunity_name        = EXCLUDED.opportunity_name,
+        account_name            = EXCLUDED.account_name,
+        created_date            = EXCLUDED.created_date,
+        created_month           = EXCLUDED.created_month,
         stage                   = EXCLUDED.stage,
         close_date              = EXCLUDED.close_date,
         monthly_mrr             = EXCLUDED.monthly_mrr,
         primary_channel         = EXCLUDED.primary_channel,
         primary_campaign_source = EXCLUDED.primary_campaign_source,
+        primary_campaign_name   = EXCLUDED.primary_campaign_name,
+        lead_source             = EXCLUDED.lead_source,
+        opportunity_owner       = EXCLUDED.opportunity_owner,
+        opp_type                = EXCLUDED.opp_type,
+        number_of_locations     = EXCLUDED.number_of_locations,
+        demoed                  = EXCLUDED.demoed,
+        order_type              = EXCLUDED.order_type,
         ingested_at             = NOW()`
+  );
+}
+
+// ─── Delete helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Delete all netsuite_actuals rows for a given month_key.
+ * Called before re-inserting rows from an updated file so that vendors
+ * removed from the source file are not left as stale DB rows.
+ */
+export async function deleteNetsuiteActualsByMonth(monthKey: string): Promise<void> {
+  if (!monthKey) return;
+  await execute(
+    `DELETE FROM netsuite_actuals WHERE month_key = $1 AND source = 'netsuite'`,
+    [monthKey]
   );
 }
 

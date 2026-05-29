@@ -13,15 +13,15 @@ import { formatCurrency, formatDateTime, formatMonthShort } from '@/lib/format';
 import type { PeriodType } from '@/lib/periodExpr';
 
 const PERIOD_LABELS: Record<PeriodType, string> = {
-  accounting:  'Accounting Period',
   transaction: 'Transaction Date',
+  accounting:  'Accounting Period',
 };
 const PERIOD_TOOLTIPS: Record<PeriodType, string> = {
-  accounting:  'Groups spend by the period it was booked in NetSuite',
   transaction: 'Groups spend by when the transaction actually occurred',
+  accounting:  'Groups spend by the period it was booked in NetSuite',
 };
 import type { VendorClassificationRow } from '@/app/api/vendor-classifications/route';
-import { PAIR_CLASSIFICATIONS } from '@/lib/vendorPresets';
+import { PAIR_CLASSIFICATIONS, getGlPrefixChannel } from '@/lib/vendorPresets';
 import { ToastContainer, type ToastItem } from '@/components/ui/Toast';
 import { PreviewModal, type PendingChange } from '@/components/ui/PreviewModal';
 import { useUnsavedChanges } from '@/lib/UnsavedChangesContext';
@@ -291,27 +291,27 @@ export default function VendorClassificationsClient() {
         id: 'vendor',
         header: 'Vendor / Entity',
         cell: ({ row }) => {
-          const { entity_name, financial_row, description } = row.original;
+          const { entity_name, has_name, financial_row, description } = row.original;
 
-          if (entity_name === '-Unassigned-') {
-            // Truncate description subtitle at 80 chars
-            const subtitle = description
-              ? (description.length > 80 ? description.slice(0, 80) + '…' : description)
-              : '(no detail)';
+          if (!has_name) {
+            // Name (col G) was blank — show "-Unassigned-" as primary label.
+            // entity_name holds the description/memo text (for DB uniqueness);
+            // show it as the italic subtitle so the user can identify the expense.
+            const subtitleText = description ?? entity_name;
+            const subtitle = subtitleText.length > 80
+              ? subtitleText.slice(0, 80) + '…'
+              : subtitleText;
             return (
               <div>
-                <span className="font-mono text-xs text-gray-900">-Unassigned-</span>
+                <span className="text-xs text-gray-900">-Unassigned-</span>
                 {financial_row && (
                   <div className="mt-0.5 font-mono text-[11px] text-gray-400 truncate max-w-xs">
                     {financial_row}
                   </div>
                 )}
                 <div
-                  className={[
-                    'mt-0.5 text-[11px] italic max-w-xs',
-                    description ? 'text-gray-400' : 'text-gray-300',
-                  ].join(' ')}
-                  title={description ?? undefined}
+                  className="mt-0.5 text-[11px] italic text-gray-400 max-w-xs"
+                  title={subtitleText}
                 >
                   {subtitle}
                 </div>
@@ -387,17 +387,19 @@ export default function VendorClassificationsClient() {
           const { manually_set, is_preset, financial_row, entity_name } = info.row.original;
           if (manually_set) return <Badge color="blue">Manual</Badge>;
           const inMap = !!PAIR_CLASSIFICATIONS[`${financial_row}|${entity_name}`];
-          if (is_preset || inMap) return <Badge color="green">Preset</Badge>;
+          const inGlRule = !!getGlPrefixChannel(financial_row);
+          if (is_preset || inMap || inGlRule) return <Badge color="green">Preset</Badge>;
           return <Badge color="gray">—</Badge>;
         },
       }),
-      // Last Modified — only meaningful in current mode
       colHelper.accessor('updated_at', {
         header: 'Last Modified',
         cell: (info) => {
           const { manually_set } = info.row.original;
           const ts = info.getValue();
-          if (isHistoryMode || !manually_set || !ts) {
+          // Show timestamp whenever the vendor has a manual classification and we
+          // have a timestamp — works in both "All" mode and month-specific mode.
+          if (!manually_set || !ts) {
             return <span className="text-gray-300">—</span>;
           }
           return (
@@ -485,7 +487,7 @@ export default function VendorClassificationsClient() {
         {/* Period type toggle */}
         <div className="flex items-center gap-1.5">
           <div className="inline-flex rounded-md border border-[var(--color-neutral)] overflow-hidden text-sm">
-            {(['accounting', 'transaction'] as PeriodType[]).map((pt) => (
+            {(['transaction', 'accounting'] as PeriodType[]).map((pt) => (
               <button
                 key={pt}
                 onClick={() => setPeriodType(pt)}

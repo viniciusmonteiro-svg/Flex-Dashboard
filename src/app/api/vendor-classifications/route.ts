@@ -6,6 +6,7 @@ import { buildPeriodExpr } from '@/lib/periodExpr';
 export interface VendorClassificationRow {
   financial_row: string;
   entity_name: string;
+  has_name: boolean;       // false when col G (Name) was blank → show "-Unassigned-" in UI
   channel: string;         // month-aware active channel
   current_channel: string; // always from vendor_classifications (for diff indicator)
   is_preset: boolean;
@@ -36,6 +37,7 @@ export async function GET(req: NextRequest) {
     const rows = await query<{
       financial_row: string;
       entity_name: string;
+      has_name: boolean;
       channel: string;
       current_channel: string;
       is_preset: boolean;
@@ -47,20 +49,32 @@ export async function GET(req: NextRequest) {
     }>(
       // Spend filter: when a period is selected, only rows whose derived period
       // matches are included — so SUM(amount) and months_active reflect that slice.
-      // Classification join: vch.month_key = selectedPeriod (approximation that
-      // works correctly because accounting_period and month_key share the same
-      // calendar month for all our ingested data).
+      //
+      // Classification joins:
+      //   vch     — history for the SELECTED month only (channel/flags for that period)
+      //   vch_any — aggregated across ALL months (drives manually_set + updated_at when
+      //             no month is selected or when vc has no manual record)
+      //
+      // updated_at priority:
+      //   1. This month's manual history timestamp (viewing a specific month)
+      //   2. Global vendor_classifications timestamp (globally classified)
+      //   3. Most recent manual timestamp across any month (month-specific classifs)
       `SELECT
          n.financial_row,
          n.entity_name,
-         COALESCE(vc.channel,                       'Unclassified') AS current_channel,
-         COALESCE(vch.channel, vc.channel,          'Unclassified') AS channel,
-         COALESCE(vch.is_preset,    vc.is_preset,   FALSE)          AS is_preset,
-         COALESCE(vch.manually_set, vc.manually_set, FALSE)         AS manually_set,
-         vc.updated_at,
-         SUM(n.amount)                                              AS total_amount,
-         COUNT(DISTINCT ${PERIOD})                                  AS months_active,
-         MAX(n.description)                                         AS description
+         BOOL_AND(n.has_name)                                                           AS has_name,
+         COALESCE(vc.channel,                                          'Unclassified')  AS current_channel,
+         COALESCE(vch.channel, vc.channel,                            'Unclassified')  AS channel,
+         COALESCE(vch.is_preset,    vc.is_preset,   FALSE)                             AS is_preset,
+         COALESCE(vch.manually_set, vc.manually_set, vch_any.any_manually_set, FALSE)  AS manually_set,
+         COALESCE(
+           CASE WHEN vch.manually_set THEN COALESCE(vch.updated_at, vch.created_at) END,
+           CASE WHEN vc.manually_set  THEN vc.updated_at END,
+           vch_any.last_manual_at
+         )                                                                              AS updated_at,
+         SUM(n.amount)                                                                  AS total_amount,
+         COUNT(DISTINCT ${PERIOD})                                                      AS months_active,
+         MAX(n.description)                                                             AS description
        FROM netsuite_actuals n
        LEFT JOIN vendor_classifications vc
               ON vc.financial_row = n.financial_row
@@ -69,10 +83,21 @@ export async function GET(req: NextRequest) {
               ON vch.financial_row = n.financial_row
              AND vch.entity_name   = n.entity_name
              AND vch.month_key     = $1
+       LEFT JOIN (
+         SELECT
+           financial_row,
+           entity_name,
+           BOOL_OR(manually_set)                                                    AS any_manually_set,
+           MAX(CASE WHEN manually_set THEN COALESCE(updated_at, created_at) END)    AS last_manual_at
+         FROM vendor_classification_history
+         GROUP BY financial_row, entity_name
+       ) vch_any ON vch_any.financial_row = n.financial_row
+                AND vch_any.entity_name   = n.entity_name
        WHERE ($1::text IS NULL OR ${PERIOD} = $1)
        GROUP BY n.financial_row, n.entity_name,
                 vc.channel, vc.is_preset, vc.manually_set, vc.updated_at,
-                vch.channel, vch.is_preset, vch.manually_set
+                vch.channel, vch.is_preset, vch.manually_set, vch.updated_at, vch.created_at,
+                vch_any.any_manually_set, vch_any.last_manual_at
        ORDER BY SUM(n.amount) DESC`,
       [selectedPeriod]
     );
@@ -80,6 +105,7 @@ export async function GET(req: NextRequest) {
     const mapped: VendorClassificationRow[] = rows.map((r) => ({
       financial_row:   r.financial_row,
       entity_name:     r.entity_name,
+      has_name:        r.has_name,
       channel:         r.channel,
       current_channel: r.current_channel,
       is_preset:       r.is_preset,

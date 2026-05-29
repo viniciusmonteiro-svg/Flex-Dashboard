@@ -2,11 +2,13 @@ export interface NetsuiteRow {
   source: string;                     // always "netsuite"
   month_key: string;                  // "YYYY-MM" derived from filename
   financial_row: string;              // e.g. "48501 - Partnership Commissions"
-  entity_name: string;                // e.g. "24601 Jive"
+  entity_name: string;                // col G Name, or description/memo when name blank
+  has_name: boolean;                  // true when col G (Name) was non-blank
+  tx_month: string;                   // "YYYY-MM" from transaction_date, or "" if none
   amount: number;                     // BIGINT cents
   transaction_date: string | null;    // "YYYY-MM-DD" from column D (new format only)
   accounting_period: string | null;   // "YYYY-MM" from column E (new format only)
-  description: string | null;         // column J memo/description (new format only)
+  description: string | null;         // column J/I memo/description (new format only)
 }
 
 export interface MarketingLeadsRow {
@@ -32,10 +34,13 @@ export interface SalesforceRow {
   number_of_locations: number;
   primary_channel: string;
   primary_campaign_source: string;
+  primary_campaign_name: string | null;
   lead_source: string;
   opportunity_owner: string;
   opp_type: string;
   created_month: string;          // YYYY-MM derived from created_date
+  demoed: boolean;                // true when opportunity had a demo
+  order_type: string;             // e.g. "New" | "Upsell Group"
 }
 
 // Metadata passed alongside raw rows so parseRows can access period context

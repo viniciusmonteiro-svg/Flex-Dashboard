@@ -37,3 +37,5 @@ next-env.d.ts
 # Sync state (Drive integration)
 .sync-browser-state.json
 .sync-token.json
+
+.vercel

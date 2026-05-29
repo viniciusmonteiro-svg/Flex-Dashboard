@@ -32,3 +32,11 @@ export function formatMonthShort(monthKey: string): string {
   const date = new Date(Number(year), Number(month) - 1, 1);
   return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
 }
+
+export function formatDateTime(ts: string): string {
+  // '2026-05-21T15:45:00Z' → 'May 21, 2026 3:45 PM'
+  const d = new Date(ts);
+  const datePart = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const timePart = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  return `${datePart} ${timePart}`;
+}

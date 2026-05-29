@@ -1,6 +1,6 @@
 import path from 'path';
 import { parseFile } from './parser';
-import { upsertNetsuiteActuals, upsertLeads, upsertOpportunities, upsertIngestedFile } from './writer';
+import { upsertNetsuiteActuals, upsertLeads, upsertOpportunities, upsertIngestedFile, deleteNetsuiteActualsByMonth } from './writer';
 import type {
   SourceDefinition,
   ClassifiedFile,
@@ -45,6 +45,11 @@ export async function ingestFiles(
 
       if (!preview) {
         if (source.name === 'netsuiteSpend') {
+          // Delete existing rows for this month before re-inserting, so that
+          // vendors removed from the updated source file do not linger in the DB.
+          if (file.monthKey) {
+            await deleteNetsuiteActualsByMonth(file.monthKey);
+          }
           await upsertNetsuiteActuals(rows as NetsuiteRow[]);
         } else if (source.name === 'salesforceLeads') {
           await upsertOpportunities(rows as SalesforceRow[]);

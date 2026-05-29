@@ -2,9 +2,9 @@ import fs from 'fs';
 import path from 'path';
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
-import type { SourceDefinition, NetsuiteRow, MarketingLeadsRow } from './types';
+import type { SourceDefinition, NetsuiteRow, MarketingLeadsRow, SalesforceRow } from './types';
 
-type AnyRow = NetsuiteRow | MarketingLeadsRow;
+type AnyRow = NetsuiteRow | MarketingLeadsRow | SalesforceRow;
 
 function parseXlsx(filePath: string, headerRowIndex: number): Record<string, string>[] {
   // Read into a buffer first — XLSX.readFile() can fail on Windows shortcut/UNC
@@ -13,9 +13,16 @@ function parseXlsx(filePath: string, headerRowIndex: number): Record<string, str
   const buffer = fs.readFileSync(filePath);
   const workbook = XLSX.read(buffer, { type: 'buffer' });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  // raw: false → use the cell's formatted display value.
+  // This ensures date cells (e.g. col D "9/30/2025") come back as the
+  // human-readable string rather than an Excel serial number or Date object,
+  // which parseTransactionDate (and other text parsers) can handle correctly.
+  // Amount cells formatted as "$300.00" / "($405.68)" are already handled by
+  // parseAmount, so no other parsers are affected.
   return XLSX.utils.sheet_to_json<Record<string, string>>(sheet, {
     range: headerRowIndex,
     defval: '',
+    raw: false,
   });
 }
 
@@ -29,7 +36,8 @@ function validateColumns(rows: Record<string, string>[], required: string[], fil
   if (rows.length === 0) {
     throw new Error(`[parser] No rows found in ${filePath}`);
   }
-  const headers = Object.keys(rows[0]);
+  // Trim header names before checking — XLSX may include trailing spaces.
+  const headers = Object.keys(rows[0]).map((h) => h.trim());
   const missing = required.filter((col) => !headers.includes(col));
   if (missing.length > 0) {
     throw new Error(

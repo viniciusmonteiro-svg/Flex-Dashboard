@@ -17,9 +17,14 @@ const SECTION_HEADERS = new Set([
 ]);
 
 function parseAmount(raw: string | undefined): number {
-  // "$17,980.07" → 1798007  |  "-$1,209.29" → -120929  |  blank → 0
-  const s = String(raw ?? '').replace(/[$,\s]/g, '');
+  // "$17,980.07"  → 1798007
+  // "-$1,209.29"  → -120929
+  // "($405.68)"   → -40568   (Excel accounting format for negatives)
+  // blank / "-"   → 0
+  let s = String(raw ?? '').replace(/[$,\s]/g, '');
   if (!s || s === '-') return 0;
+  // Parenthetical negative: "(405.68)" → "-405.68"
+  if (s.startsWith('(') && s.endsWith(')')) s = '-' + s.slice(1, -1);
   const n = parseFloat(s);
   return Number.isFinite(n) ? Math.round(n * 100) : 0;
 }
@@ -33,7 +38,7 @@ function deriveMonthKey(filename: string): string {
   return match ? `${match[2]}-${match[1]}` : '';
 }
 
-/** Parse "9/30/2025" → "2025-09-30", or return null on bad input. */
+/** Parse "9/30/2025" or "9/30/25" → "2025-09-30", or return null on bad input. */
 function parseTransactionDate(raw: string | undefined): string | null {
   const s = String(raw ?? '').trim();
   if (!s) return null;
@@ -41,7 +46,9 @@ function parseTransactionDate(raw: string | undefined): string | null {
   if (parts.length !== 3) return null;
   const [m, d, y] = parts;
   if (!m || !d || !y) return null;
-  return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  // Normalise 2-digit year → 4-digit (all our data is 2000s)
+  const year = y.length === 2 ? `20${y}` : y;
+  return `${year}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
 }
 
 const MONTH_ABBR: Record<string, string> = {
@@ -68,15 +75,19 @@ function parseAccountingPeriod(raw: string | undefined): string | null {
  *   A: Financial Row  — carry-forward group header (same logic as legacy format)
  *   D: Date           — transaction date  "9/30/2025" → "2025-09-30"
  *   E: Accounting Period — "Oct 2025" → "2025-10"
- *   G: Name           → entity_name
- *   J: Description    → description (trim, null if blank)
+ *   G: Name           → entity_name (primary)
+ *   I: Memo           → description fallback / entity_name fallback #3
+ *   J: Description    → description (primary) / entity_name fallback #2
  *   M: Amount         → cents  "$1,234.56" / "-$9.99"
+ *
+ * Entity name fallback chain: Name (G) → Description (J) → Memo (I) → '-Unassigned-'
+ * Description fallback chain: Description (J) → Memo (I) → null
  *
  * Skip rules:
  *   - Rows starting with "Total" (don't update carry-forward either)
  *   - Known section-header strings in column A
- *   - Group header rows (non-blank A, blank G+J) — carry forward only
- *   - Rows where both entity_name AND description are blank
+ *   - Group header rows (non-blank A, blank G+J+I) — carry forward only
+ *   - Rows where Name AND Description AND Memo are all blank
  */
 export const netsuiteSpend: SourceDefinition<NetsuiteRow> = {
   name: 'netsuiteSpend',
@@ -95,13 +106,12 @@ export const netsuiteSpend: SourceDefinition<NetsuiteRow> = {
     for (const row of rows) {
       const rawFR  = String(row['Financial Row'] ?? '').trim();
 
-      // Name columns — check BEFORE applying fallback so skip logic works correctly
-      const nameG   = String(row['Name']           ?? '').trim(); // col G
-      const entityN = String(row['Entity (Line)']  ?? '').trim(); // col N
+      // Name column — col G
+      const nameG = String(row['Name'] ?? '').trim();
 
       // Description columns — col J first, col I (Memo) as fallback
-      const descJ   = String(row['Description'] ?? '').trim(); // col J
-      const memoI   = String(row['Memo']        ?? '').trim(); // col I
+      const descJ  = String(row['Description'] ?? '').trim(); // col J
+      const memoI  = String(row['Memo']        ?? '').trim(); // col I
       const description = descJ || memoI || null;
 
       // Total rows — skip without updating carry-forward
@@ -111,20 +121,29 @@ export const netsuiteSpend: SourceDefinition<NetsuiteRow> = {
       if (rawFR) {
         if (SECTION_HEADERS.has(rawFR)) continue;
         currentFinancialRow = rawFR;
-        // Pure group header: GL label only, no entity and no description — carry forward only
-        if (!nameG && !entityN && !description) continue;
+        // Pure group header: GL label only, no name and no description — carry forward only
+        if (!nameG && !description) continue;
       }
 
       // No current group yet — skip
       if (!currentFinancialRow) continue;
 
-      // Skip pure journal entries with zero identifying information
-      if (!nameG && !entityN && !description) continue;
+      // Skip rows with zero identifying information
+      if (!nameG && !description) continue;
 
-      // Apply entity name fallback chain AFTER skip checks
-      const entity_name = nameG || entityN || '-Unassigned-';
+      // has_name: true only when col G (Name) was non-blank.
+      // entity_name falls back to description/memo text for row uniqueness — each
+      // expense line stays distinct even when multiple name-blank rows share the
+      // same financial_row. The UI uses has_name to show the "-Unassigned-" pattern.
+      const has_name    = nameG !== '';
+      const entity_name = nameG || descJ || memoI || '-Unassigned-';
 
       const transaction_date  = parseTransactionDate(row['Date']);
+      // tx_month: the calendar month of the transaction ("YYYY-MM"), used as part
+      // of the aggregation key so that cross-period entries (e.g. a Sep 30 expense
+      // inside the Oct accounting file) are stored as a separate row from the Oct
+      // transactions of the same vendor, enabling correct Transaction Date filtering.
+      const tx_month          = transaction_date ? transaction_date.slice(0, 7) : '';
       const accounting_period =
         parseAccountingPeriod(row['Accounting Period']) ?? month_key;
 
@@ -133,6 +152,8 @@ export const netsuiteSpend: SourceDefinition<NetsuiteRow> = {
         month_key,
         financial_row: currentFinancialRow,
         entity_name,
+        has_name,
+        tx_month,
         amount: parseAmount(row['Amount']),
         transaction_date,
         accounting_period,

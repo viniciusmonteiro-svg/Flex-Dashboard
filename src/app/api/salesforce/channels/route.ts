@@ -42,8 +42,29 @@ const CHANNEL_COLORS: Record<string, string> = {
   'Other':              '#6b7280',
 };
 
+/**
+ * Maps display-layer channel labels back to raw primary_channel values in the DB.
+ * Mirrors DISPLAY_TO_RAW in /api/salesforce/campaigns/route.ts — keep in sync.
+ */
+const DISPLAY_TO_RAW: Record<string, string[]> = {
+  'Paid Search':        ['Web Paid'],
+  'SEO / Organic':      ['Web Organic'],
+  'Paid Social':        ['Social Media'],
+  'Partner / Referral': ['Referral', 'Partner'],
+  'Other':              ['Web Other'],
+};
+
+function rawChannels(displayLabel: string): string[] {
+  return DISPLAY_TO_RAW[displayLabel] ?? [displayLabel];
+}
+
 function channelLabel(raw: string): string {
-  return CHANNEL_LABEL_MAP[raw.trim()] ?? raw.trim();
+  const trimmed = raw.trim();
+  if (CHANNEL_LABEL_MAP[trimmed]) return CHANNEL_LABEL_MAP[trimmed];
+  // If the raw value is already a known display channel, keep it as-is
+  if (CHANNEL_ORDER.includes(trimmed)) return trimmed;
+  // Everything else rolls into "Other"
+  return 'Other';
 }
 
 // ─── Route types ──────────────────────────────────────────────────────────────
@@ -54,6 +75,7 @@ export interface CohortCell {
   won: number;
   lost: number;
   open: number;
+  demoed: number;
 }
 
 export interface ChannelCohort {
@@ -75,28 +97,25 @@ type View = 'monthly' | 'quarterly' | 'yearly';
 /** SQL expression that produces the period key from created_month (YYYY-MM) */
 function periodSqlExpr(view: View): string {
   if (view === 'quarterly') {
-    // e.g. "2025-Q1"
     return `LEFT(created_month, 4) || '-Q' ||
             CEIL(RIGHT(created_month, 2)::int / 3.0)::int`;
   }
   if (view === 'yearly') {
     return `LEFT(created_month, 4)`;
   }
-  // monthly: key already is created_month (YYYY-MM)
   return `created_month`;
 }
 
 /** Convert a sort key to a display label */
 function periodDisplayLabel(key: string, view: View): string {
   if (view === 'quarterly') {
-    // "2025-Q1" → "Q1 2025"
     const [yr, q] = key.split('-');
     return `${q} ${yr}`;
   }
   if (view === 'yearly') {
-    return key; // "2025"
+    return key;
   }
-  return formatMonthShort(key); // "Jan 25"
+  return formatMonthShort(key);
 }
 
 // ─── Route ────────────────────────────────────────────────────────────────────
@@ -112,26 +131,41 @@ export async function GET(req: NextRequest) {
       ? (rawView as View)
       : 'monthly';
 
-    const year     = searchParams.get('year')      ?? 'all';
-    const monthKey = searchParams.get('month_key') ?? 'all';
+    // Unified date-range + channel params (same as /api/salesforce/campaigns)
+    const from    = searchParams.get('from')    ?? null;  // YYYY-MM or null
+    const to      = searchParams.get('to')      ?? null;  // YYYY-MM or null
+    const channel = searchParams.get('channel') ?? 'all';
+
+    const isAllChannels = channel === 'all';
+    // For "Other", we want everything that does NOT map to a known display channel.
+    // The set of raw values that map to a specific known channel (not Other) is
+    // everything in CHANNEL_LABEL_MAP keys plus CHANNEL_ORDER entries (minus 'Other').
+    const isOtherFilter = channel === 'Other';
+    const channelRaws   = isAllChannels || isOtherFilter ? [] : rawChannels(channel);
+    // All raw channel values that are explicitly classified into a known non-Other channel:
+    const allKnownRaws  = [
+      ...Object.keys(CHANNEL_LABEL_MAP),
+      ...CHANNEL_ORDER.filter((c) => c !== 'Other'),
+    ];
 
     // ── WHERE conditions ──────────────────────────────────────────────────────
-    const conditions: string[] = [
-      `created_month IS NOT NULL AND created_month != ''`,
-      `COALESCE(NULLIF(TRIM(primary_channel), ''), 'Unclassified') NOT IN ('Unclassified')`,
-    ];
-    const params: string[] = [];
+    // $1 = from (text|null), $2 = to (text|null),
+    // $3 = isAllChannels (bool), $4 = channelRaws (text[]),
+    // $5 = isOtherFilter (bool), $6 = allKnownRaws (text[])
+    const whereClause = `
+      WHERE created_month IS NOT NULL AND created_month != ''
+        AND COALESCE(NULLIF(TRIM(primary_channel), ''), 'Unclassified') NOT IN ('Unclassified')
+        AND ($1::text IS NULL OR created_month >= $1)
+        AND ($2::text IS NULL OR created_month <= $2)
+        AND (
+          $3::boolean
+          OR ($5::boolean AND TRIM(primary_channel) != ALL($6::text[]))
+          OR (NOT $3::boolean AND NOT $5::boolean AND
+              COALESCE(NULLIF(TRIM(primary_channel), ''), 'Unclassified') = ANY($4::text[]))
+        )
+    `;
 
-    if (monthKey !== 'all') {
-      params.push(monthKey);
-      conditions.push(`created_month = $${params.length}`);
-    } else if (year !== 'all') {
-      params.push(year);
-      conditions.push(`LEFT(created_month, 4) = $${params.length}`);
-    }
-
-    const whereClause = `WHERE ${conditions.join(' AND ')}`;
-    const periodExpr  = periodSqlExpr(view);
+    const periodExpr = periodSqlExpr(view);
 
     // ── Query ─────────────────────────────────────────────────────────────────
     const rows = await query<{
@@ -141,6 +175,7 @@ export async function GET(req: NextRequest) {
       won:         string;
       lost:        string;
       open:        string;
+      demoed:      string;
     }>(
       `SELECT
          ${periodExpr}                                                        AS period_key,
@@ -148,12 +183,13 @@ export async function GET(req: NextRequest) {
          COUNT(*)                                                             AS created,
          COUNT(*) FILTER (WHERE stage = 'Closed Won')                        AS won,
          COUNT(*) FILTER (WHERE stage = 'Closed Lost')                       AS lost,
-         COUNT(*) FILTER (WHERE stage NOT IN ('Closed Won','Closed Lost'))    AS open
+         COUNT(*) FILTER (WHERE stage NOT IN ('Closed Won','Closed Lost'))    AS open,
+         COUNT(*) FILTER (WHERE demoed = true)                               AS demoed
        FROM salesforce_opportunities
        ${whereClause}
        GROUP BY 1, 2
        ORDER BY 1 ASC, 2 ASC`,
-      params
+      [from, to, isAllChannels, channelRaws, isOtherFilter, allKnownRaws]
     );
 
     // ── Build period list (sorted) ────────────────────────────────────────────
@@ -164,7 +200,7 @@ export async function GET(req: NextRequest) {
     const periodLabels = sortedPeriodKeys.map((k) => periodDisplayLabel(k, view));
 
     // ── Aggregate by display channel + period ─────────────────────────────────
-    type CellMap = Map<string, { created: number; won: number; lost: number; open: number }>;
+    type CellMap = Map<string, { created: number; won: number; lost: number; open: number; demoed: number }>;
     const channelMap = new Map<string, CellMap>();
 
     for (const r of rows) {
@@ -172,12 +208,13 @@ export async function GET(req: NextRequest) {
       if (!channelMap.has(label)) channelMap.set(label, new Map());
       const cellMap = channelMap.get(label)!;
 
-      const prev = cellMap.get(r.period_key) ?? { created: 0, won: 0, lost: 0, open: 0 };
+      const prev = cellMap.get(r.period_key) ?? { created: 0, won: 0, lost: 0, open: 0, demoed: 0 };
       cellMap.set(r.period_key, {
         created: prev.created + Number(r.created),
         won:     prev.won     + Number(r.won),
         lost:    prev.lost    + Number(r.lost),
         open:    prev.open    + Number(r.open),
+        demoed:  prev.demoed  + Number(r.demoed),
       });
     }
 
@@ -190,7 +227,7 @@ export async function GET(req: NextRequest) {
     const channels: ChannelCohort[] = orderedLabels.map((label) => {
       const cellMap = channelMap.get(label)!;
       const values: CohortCell[] = sortedPeriodKeys.map((pk, i) => {
-        const cell = cellMap.get(pk) ?? { created: 0, won: 0, lost: 0, open: 0 };
+        const cell = cellMap.get(pk) ?? { created: 0, won: 0, lost: 0, open: 0, demoed: 0 };
         return { period: periodLabels[i], ...cell };
       });
       return { channel: label, color: CHANNEL_COLORS[label] ?? '#94a3b8', values };
@@ -198,12 +235,12 @@ export async function GET(req: NextRequest) {
 
     // ── Totals row ────────────────────────────────────────────────────────────
     const totals: CohortCell[] = sortedPeriodKeys.map((pk, i) => {
-      let created = 0, won = 0, lost = 0, open = 0;
+      let created = 0, won = 0, lost = 0, open = 0, demoed = 0;
       for (const cellMap of channelMap.values()) {
         const cell = cellMap.get(pk);
-        if (cell) { created += cell.created; won += cell.won; lost += cell.lost; open += cell.open; }
+        if (cell) { created += cell.created; won += cell.won; lost += cell.lost; open += cell.open; demoed += cell.demoed; }
       }
-      return { period: periodLabels[i], created, won, lost, open };
+      return { period: periodLabels[i], created, won, lost, open, demoed };
     });
 
     return NextResponse.json({ periods: periodLabels, channels, totals } satisfies CohortResponse);

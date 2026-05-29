@@ -39,11 +39,12 @@ export async function POST(req: NextRequest) {
           const fr = financial_row ?? '';
           await client.query(
             `INSERT INTO vendor_classification_history
-               (financial_row, entity_name, channel, month_key, is_preset, manually_set)
-             VALUES ($1, $2, $3, $4, FALSE, TRUE)
+               (financial_row, entity_name, channel, month_key, is_preset, manually_set, updated_at)
+             VALUES ($1, $2, $3, $4, FALSE, TRUE, NOW())
              ON CONFLICT (financial_row, entity_name, month_key) DO UPDATE
                SET channel      = EXCLUDED.channel,
-                   manually_set = TRUE`,
+                   manually_set = TRUE,
+                   updated_at   = NOW()`,
             [fr, entity_name, channel, month_key]
           );
           saved++;
