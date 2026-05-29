@@ -7,26 +7,46 @@ const isPublicRoute = createRouteMatcher([
   "/sign-up(.*)",
   "/pending(.*)",
   "/access-denied(.*)",
+  "/checking(.*)",         // race-condition buffer — must be public
   "/api/auth/webhook(.*)",
+  "/api/auth/status(.*)",  // polling endpoint — must be public
 ]);
 
-export default clerkMiddleware(async (auth, request) => {
-  // Let public routes through without any auth check
-  if (isPublicRoute(request)) return NextResponse.next();
+const isAdminRoute = createRouteMatcher(["/user-management(.*)"]);
 
-  // All other routes require the user to be signed in.
-  // Status-based redirects (pending/denied) are handled by
-  // requireAuth() inside each page using currentUser() for fresh metadata.
-  await auth.protect();
+export default clerkMiddleware(async (auth, req) => {
+  if (isPublicRoute(req)) return NextResponse.next();
+
+  const { sessionClaims } = await auth.protect();
+
+  const meta = (sessionClaims?.publicMetadata ?? {}) as {
+    status?: string;
+    role?: string;
+  };
+
+  // Empty status = webhook hasn't fired yet (race condition on first sign-in).
+  // Do NOT treat empty status as pending — send to /checking instead.
+  // /checking polls /api/auth/status (which uses currentUser() for live data)
+  // until the webhook completes, then does a full-page reload to get a fresh JWT.
+  if (!meta.status) {
+    return NextResponse.redirect(new URL("/checking", req.url));
+  }
+
+  if (meta.status === "denied") {
+    return NextResponse.redirect(new URL("/access-denied", req.url));
+  }
+
+  if (meta.status === "pending") {
+    return NextResponse.redirect(new URL("/pending", req.url));
+  }
+
+  if (isAdminRoute(req) && meta.role !== "admin") {
+    return NextResponse.redirect(new URL("/access-denied", req.url));
+  }
 
   return NextResponse.next();
 });
 
 export const config = {
-  matcher: [
-    // Skip Next.js internals and static files
-    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
-    // Always run for API routes
-    "/(api|trpc)(.*)",
-  ],
+  matcher: ["/((?!.*\\..*|_next).*)", "/", "/(api|trpc)(.*)"],
 };
