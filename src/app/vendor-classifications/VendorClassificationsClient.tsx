@@ -25,6 +25,18 @@ import { PAIR_CLASSIFICATIONS, getGlPrefixChannel } from '@/lib/vendorPresets';
 import { ToastContainer, type ToastItem } from '@/components/ui/Toast';
 import { PreviewModal, type PendingChange } from '@/components/ui/PreviewModal';
 import { useUnsavedChanges } from '@/lib/UnsavedChangesContext';
+import DepartmentAdjustmentTab from './DepartmentAdjustmentTab';
+import GLReclassificationTab   from './GLReclassificationTab';
+import IntercompanyTab         from './IntercompanyTab';
+
+type Subtab = 'vendor' | 'adjustment' | 'gl' | 'intercompany';
+const SUBTAB_LABELS: Record<Subtab, string> = {
+  vendor:       'Vendor Classification',
+  adjustment:   'Department Adjustment',
+  gl:           'G&L Reclassification',
+  intercompany: 'Intercompany',
+};
+const ALL_SUBTABS: Subtab[] = ['vendor', 'adjustment', 'gl', 'intercompany'];
 
 const CHANNELS = [
   'Paid Search',
@@ -51,6 +63,8 @@ function rowKey(r: Pick<VendorClassificationRow, 'financial_row' | 'entity_name'
 const colHelper = createColumnHelper<VendorClassificationRow>();
 
 export default function VendorClassificationsClient() {
+  const [activeSubtab, setActiveSubtab] = useState<Subtab>('vendor');
+
   const [rows, setRows] = useState<VendorClassificationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState(false);
@@ -438,7 +452,40 @@ export default function VendorClassificationsClient() {
   }, [selectedMonth]);
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-8 space-y-6">
+    <>
+      {/* ── Subtab navigation ── */}
+      <div className="mx-auto max-w-7xl px-6 pt-8 pb-2">
+        <div style={{ display: 'flex', gap: 8 }}>
+          {ALL_SUBTABS.map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveSubtab(tab)}
+              style={{
+                padding: '6px 16px',
+                fontSize: 13,
+                borderRadius: 9999,
+                border: activeSubtab === tab ? 'none' : '1px solid #e2e8f0',
+                background: activeSubtab === tab ? 'var(--color-primary)' : 'transparent',
+                color: activeSubtab === tab ? '#ffffff' : 'var(--color-neutral)',
+                cursor: 'pointer',
+                fontWeight: activeSubtab === tab ? 600 : 400,
+                transition: 'all 0.15s',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {SUBTAB_LABELS[tab]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Vendor Classification tab ── */}
+      {activeSubtab === 'adjustment'   && <DepartmentAdjustmentTab />}
+      {activeSubtab === 'gl'           && <GLReclassificationTab />}
+      {activeSubtab === 'intercompany' && <IntercompanyTab />}
+
+      {activeSubtab === 'vendor' && (
+      <div className="mx-auto max-w-7xl px-6 pb-8 space-y-6">
       {/* ── Header ── */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-gray-900">Vendor Classification</h1>
@@ -677,6 +724,8 @@ export default function VendorClassificationsClient() {
       {/* ── Toasts ── */}
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
+      )}
+    </>
   );
 }
 

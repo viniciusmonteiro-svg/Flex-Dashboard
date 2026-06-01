@@ -3,6 +3,7 @@ import { initDb } from '@/db/init';
 import { query } from '@/db/query';
 import { CLASSIFICATION_JOINS, CHANNEL_EXPR } from '@/lib/classifyVendor';
 import { buildPeriodExpr } from '@/lib/periodExpr';
+import { buildIntercompanyJoin, INTERCOMPANY_AMOUNT_EXPR, GL_EXCLUSION_CLAUSE } from '@/lib/channelCostQuery';
 
 interface RawRow {
   channel?: string;
@@ -87,10 +88,11 @@ export async function GET(req: NextRequest) {
     const rawRows = await query<RawRow>(
       `SELECT ${channelSelect} n.financial_row, n.entity_name,
               ${PERIOD} AS month_key,
-              SUM(n.amount) / 100 AS amount
+              SUM(${INTERCOMPANY_AMOUNT_EXPR}) / 100 AS amount
        FROM netsuite_actuals n
        ${CLASSIFICATION_JOINS}
-       ${whereClause}
+       ${buildIntercompanyJoin(PERIOD)}
+       ${whereClause ? whereClause + ` AND ${GL_EXCLUSION_CLAUSE}` : `WHERE ${GL_EXCLUSION_CLAUSE}`}
        GROUP BY ${channelGroup} n.financial_row, n.entity_name, ${PERIOD}
        ORDER BY ${channelOrder} n.financial_row, amount DESC`,
       params

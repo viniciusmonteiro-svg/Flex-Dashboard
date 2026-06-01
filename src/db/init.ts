@@ -266,6 +266,44 @@ LEFT JOIN vendor_classifications vc
  AND vc.entity_name   = n.entity_name
 WHERE n.month_key IS NOT NULL
 ON CONFLICT (financial_row, entity_name, month_key) DO NOTHING;
+
+-- ── Department adjustments ───────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS department_adjustments (
+  id          SERIAL PRIMARY KEY,
+  channel     TEXT NOT NULL UNIQUE,
+  amount      BIGINT NOT NULL DEFAULT 0,
+  description TEXT,
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_dept_adj_channel ON department_adjustments(channel);
+
+-- ── GL Reclassifications ─────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS gl_reclassifications (
+  id            SERIAL PRIMARY KEY,
+  financial_row TEXT NOT NULL UNIQUE,
+  from_channel  TEXT NOT NULL DEFAULT '',
+  to_department TEXT NOT NULL,
+  description   TEXT,
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_gl_reclass_row ON gl_reclassifications(financial_row);
+
+-- ── Intercompany allocations ─────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS intercompany_allocations (
+  id               SERIAL PRIMARY KEY,
+  financial_row    TEXT NOT NULL,
+  entity_name      TEXT NOT NULL,
+  marketing_pct    DECIMAL(5,2) NOT NULL,
+  other_department TEXT NOT NULL,
+  other_pct        DECIMAL(5,2) NOT NULL,
+  valid_from       TEXT,
+  valid_to         TEXT,
+  description      TEXT,
+  created_at       TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_interco_row    ON intercompany_allocations(financial_row);
+CREATE INDEX IF NOT EXISTS idx_interco_entity ON intercompany_allocations(entity_name);
 `;
 
 let initialized = false;

@@ -3,6 +3,7 @@ import { initDb } from '@/db/init';
 import { query } from '@/db/query';
 import { CLASSIFICATION_JOINS, CHANNEL_EXPR } from '@/lib/classifyVendor';
 import { buildPeriodExpr } from '@/lib/periodExpr';
+import { buildIntercompanyJoin, INTERCOMPANY_AMOUNT_EXPR, GL_EXCLUSION_CLAUSE } from '@/lib/channelCostQuery';
 
 export interface KpiSummaryRow {
   metric:      string;
@@ -112,11 +113,12 @@ export async function GET(req: NextRequest) {
 
     const nsRows = await query<{ period_key: string; spend: string }>(
       `SELECT
-         ${nsGroupExpr}       AS period_key,
-         SUM(n.amount) / 100  AS spend
+         ${nsGroupExpr}                           AS period_key,
+         SUM(${INTERCOMPANY_AMOUNT_EXPR}) / 100   AS spend
        FROM netsuite_actuals n
        ${CLASSIFICATION_JOINS}
-       WHERE ${nsConds.join(' AND ')}
+       ${buildIntercompanyJoin(NS_RAW)}
+       WHERE ${[...nsConds, GL_EXCLUSION_CLAUSE].join(' AND ')}
        GROUP BY ${nsGroupExpr}
        ORDER BY MIN(${NS_RAW})`,
       nsParams,
