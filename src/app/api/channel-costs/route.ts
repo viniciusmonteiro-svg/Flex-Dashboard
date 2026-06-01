@@ -3,7 +3,7 @@ import { initDb } from '@/db/init';
 import { query } from '@/db/query';
 import { CLASSIFICATION_JOINS, CHANNEL_EXPR } from '@/lib/classifyVendor';
 import { buildPeriodExpr } from '@/lib/periodExpr';
-import { buildIntercompanyJoin, INTERCOMPANY_AMOUNT_EXPR, GL_EXCLUSION_CLAUSE } from '@/lib/channelCostQuery';
+import { buildIntercompanyJoin, INTERCOMPANY_AMOUNT_EXPR, buildGLExclusionClause } from '@/lib/channelCostQuery';
 
 interface RawRow {
   channel?: string;
@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
        FROM netsuite_actuals n
        ${CLASSIFICATION_JOINS}
        ${buildIntercompanyJoin(PERIOD)}
-       ${whereClause ? whereClause + ` AND ${GL_EXCLUSION_CLAUSE}` : `WHERE ${GL_EXCLUSION_CLAUSE}`}
+       ${whereClause ? whereClause + ` AND ${buildGLExclusionClause(PERIOD)}` : `WHERE ${buildGLExclusionClause(PERIOD)}`}
        GROUP BY ${channelGroup} n.financial_row, n.entity_name, ${PERIOD}
        ORDER BY ${channelOrder} n.financial_row, amount DESC`,
       params

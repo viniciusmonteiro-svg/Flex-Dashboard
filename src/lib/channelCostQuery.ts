@@ -5,7 +5,7 @@
  *  1. Raw netsuite_actuals amounts
  *  2. vendor_classifications / vendor_classification_history (CLASSIFICATION_JOINS)
  *  3. intercompany_allocations  ← buildIntercompanyJoin + INTERCOMPANY_AMOUNT_EXPR
- *  4. gl_reclassifications      ← GL_EXCLUSION_CLAUSE
+ *  4. gl_reclassifications      ← buildGLExclusionClause
  *  5. department_adjustments    ← applyDepartmentAdjustments() (post-aggregation)
  */
 
@@ -32,22 +32,43 @@ export const INTERCOMPANY_AMOUNT_EXPR =
   `CASE WHEN ia.id IS NOT NULL THEN n.amount * ia.marketing_pct / 100.0 ELSE n.amount END`;
 
 /**
- * Add to WHERE (with AND) to exclude GL accounts fully reclassified out of marketing.
+ * Period-aware GL exclusion clause.
+ * Excludes financial_rows that have a reclassification for:
+ *   • any period  (month_key IS NULL), or
+ *   • the specific period being queried  (month_key = ${periodExpr})
+ *
+ * Add to WHERE (with AND).
  */
-export const GL_EXCLUSION_CLAUSE =
-  `n.financial_row NOT IN (SELECT financial_row FROM gl_reclassifications)`;
+export function buildGLExclusionClause(periodExpr: string): string {
+  return `n.financial_row NOT IN (
+    SELECT financial_row FROM gl_reclassifications
+    WHERE month_key IS NULL OR month_key = ${periodExpr}
+  )`;
+}
 
 /**
  * After aggregating to channel totals (dollars), fetch department_adjustments
  * and add the fixed dollar amount to each matching channel.
  *
  * T must have { channel: string; amount: number }.
+ * periodKey (YYYY-MM): if provided, also includes period-specific adjustments
+ *   for that month; if omitted, only includes all-period (month_key IS NULL) adjustments.
  */
 export async function applyDepartmentAdjustments<T extends { channel: string; amount: number }>(
-  rows: T[]
+  rows: T[],
+  periodKey?: string
 ): Promise<T[]> {
   const adjs = await query<{ channel: string; amount: string }>(
-    'SELECT channel, amount FROM department_adjustments'
+    periodKey
+      ? `SELECT channel, SUM(amount) AS amount
+         FROM department_adjustments
+         WHERE month_key IS NULL OR month_key = $1
+         GROUP BY channel`
+      : `SELECT channel, SUM(amount) AS amount
+         FROM department_adjustments
+         WHERE month_key IS NULL
+         GROUP BY channel`,
+    periodKey ? [periodKey] : []
   );
   if (adjs.length === 0) return rows;
   const adjMap = new Map(adjs.map((a) => [a.channel, Number(a.amount) / 100]));

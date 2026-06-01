@@ -278,6 +278,25 @@ CREATE TABLE IF NOT EXISTS department_adjustments (
 );
 CREATE INDEX IF NOT EXISTS idx_dept_adj_channel ON department_adjustments(channel);
 
+-- Migration: add month_key to department_adjustments for period-specific adjustments.
+-- Replace the single-column UNIQUE(channel) with two partial unique indexes so that:
+--   • exactly one "all-periods" row per channel (month_key IS NULL)
+--   • exactly one row per (channel, month_key) pair for month-specific rows
+ALTER TABLE department_adjustments ADD COLUMN IF NOT EXISTS month_key TEXT;
+DO $mig$
+BEGIN
+  -- Drop old single-column unique constraint (present in older installs)
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'department_adjustments_channel_key'
+      AND conrelid = 'department_adjustments'::regclass
+  ) THEN
+    ALTER TABLE department_adjustments DROP CONSTRAINT department_adjustments_channel_key;
+  END IF;
+END $mig$;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_dept_adj_channel_null  ON department_adjustments (channel) WHERE month_key IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_dept_adj_channel_month ON department_adjustments (channel, month_key) WHERE month_key IS NOT NULL;
+
 -- ── GL Reclassifications ─────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS gl_reclassifications (
   id            SERIAL PRIMARY KEY,
@@ -288,6 +307,22 @@ CREATE TABLE IF NOT EXISTS gl_reclassifications (
   created_at    TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_gl_reclass_row ON gl_reclassifications(financial_row);
+
+-- Migration: add month_key to gl_reclassifications for period-specific reclassifications.
+ALTER TABLE gl_reclassifications ADD COLUMN IF NOT EXISTS month_key TEXT;
+DO $mig$
+BEGIN
+  -- Drop old single-column unique constraint on financial_row
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'gl_reclassifications_financial_row_key'
+      AND conrelid = 'gl_reclassifications'::regclass
+  ) THEN
+    ALTER TABLE gl_reclassifications DROP CONSTRAINT gl_reclassifications_financial_row_key;
+  END IF;
+END $mig$;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_gl_reclass_row_null  ON gl_reclassifications (financial_row) WHERE month_key IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_gl_reclass_row_month ON gl_reclassifications (financial_row, month_key) WHERE month_key IS NOT NULL;
 
 -- ── Intercompany allocations ─────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS intercompany_allocations (

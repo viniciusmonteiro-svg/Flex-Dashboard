@@ -1,12 +1,23 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { initDb } from '@/db/init';
 import { query } from '@/db/query';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     await initDb();
+    const { searchParams } = new URL(req.url);
+    const monthKey = searchParams.get('month_key');  // 'all' | YYYY-MM | null
+
+    const params: unknown[] = [];
+    let where = '';
+    if (monthKey && monthKey !== 'all') {
+      params.push(monthKey);
+      where = `WHERE gr.month_key = $1`;
+    }
+
     const rows = await query<{
       financial_row: string;
+      month_key:     string | null;
       from_channel:  string;
       to_department: string;
       description:   string | null;
@@ -14,18 +25,24 @@ export async function GET() {
     }>(
       `SELECT
          gr.financial_row,
+         gr.month_key,
          gr.from_channel,
          gr.to_department,
          gr.description,
          COALESCE(SUM(n.amount), 0) / 100 AS total_spend
        FROM gl_reclassifications gr
        LEFT JOIN netsuite_actuals n ON n.financial_row = gr.financial_row
-       GROUP BY gr.id, gr.financial_row, gr.from_channel, gr.to_department, gr.description
-       ORDER BY gr.financial_row`
+         AND (gr.month_key IS NULL OR n.month_key = gr.month_key)
+       ${where}
+       GROUP BY gr.id, gr.financial_row, gr.month_key, gr.from_channel, gr.to_department, gr.description
+       ORDER BY gr.financial_row, gr.month_key NULLS FIRST`,
+      params
     );
+
     return NextResponse.json({
       reclassifications: rows.map((r) => ({
         financial_row: r.financial_row,
+        month_key:     r.month_key,
         from_channel:  r.from_channel,
         to_department: r.to_department,
         description:   r.description,

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ToastContainer, type ToastItem } from '@/components/ui/Toast';
+import { formatMonthShort } from '@/lib/format';
 import type { VendorClassificationRow } from '@/app/api/vendor-classifications/route';
 
 const DEPARTMENTS = ['Sales', 'Technology', 'Development', 'Administration', 'Finance', 'Other'] as const;
@@ -27,14 +28,19 @@ export default function IntercompanyTab() {
   const [showForm, setShowForm]   = useState(false);
   const [toasts, setToasts]       = useState<ToastItem[]>([]);
 
-  // Form
-  const [fVendor, setFVendor]     = useState('');
-  const [fRow, setFRow]           = useState('');
-  const [fMktPct, setFMktPct]     = useState('80');
-  const [fOtherDept, setFOtherDept] = useState<string>(DEPARTMENTS[0]);
-  const [fFrom, setFFrom]         = useState('');
-  const [fTo, setFTo]             = useState('');
-  const [fDesc, setFDesc]         = useState('');
+  // Viewing filters
+  const [months, setMonths]               = useState<string[]>([]);
+  const [selectedMonth, setSelectedMonth] = useState<string>('all');
+  const [search, setSearch]               = useState('');
+
+  // Form state
+  const [fVendor, setFVendor]         = useState('');
+  const [fRow, setFRow]               = useState('');
+  const [fMktPct, setFMktPct]         = useState('80');
+  const [fOtherDept, setFOtherDept]   = useState<string>(DEPARTMENTS[0]);
+  const [fFrom, setFFrom]             = useState('');
+  const [fTo, setFTo]                 = useState('');
+  const [fDesc, setFDesc]             = useState('');
 
   const mktNum   = parseFloat(fMktPct) || 0;
   const otherPct = parseFloat((100 - mktNum).toFixed(2));
@@ -44,7 +50,16 @@ export default function IntercompanyTab() {
     const id = crypto.randomUUID();
     setToasts((p) => [...p, { id, message: msg, type }]);
   }, []);
-  const dismissToast = useCallback((id: string) => setToasts((p) => p.filter((t) => t.id !== id)), []);
+  const dismissToast = useCallback((id: string) =>
+    setToasts((p) => p.filter((t) => t.id !== id)), []);
+
+  // Load months
+  useEffect(() => {
+    fetch('/api/vendor-classifications/months?period_type=accounting')
+      .then((r) => r.json())
+      .then((d) => { if (d.months) setMonths(d.months); })
+      .catch(() => {});
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -66,14 +81,56 @@ export default function IntercompanyTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  const vendors = useMemo(
+  // ── Dropdown data (filtered by search) ──────────────────────────────────────
+  const allVendors = useMemo(
     () => [...new Set(vcRows.map((r) => r.entity_name))].sort(),
     [vcRows]
   );
+  const filteredVendors = useMemo(() => {
+    if (!search.trim()) return allVendors;
+    const q = search.toLowerCase();
+    return allVendors.filter((v) => v.toLowerCase().includes(q));
+  }, [allVendors, search]);
+
   const rowsForVendor = useMemo(
-    () => [...new Set(vcRows.filter((r) => r.entity_name === fVendor).map((r) => r.financial_row))].sort(),
-    [vcRows, fVendor]
+    () => {
+      const base = [...new Set(
+        vcRows.filter((r) => r.entity_name === fVendor).map((r) => r.financial_row)
+      )].sort();
+      if (!search.trim()) return base;
+      const q = search.toLowerCase();
+      return base.filter((r) => r.toLowerCase().includes(q));
+    },
+    [vcRows, fVendor, search]
   );
+
+  // ── Table filtering ──────────────────────────────────────────────────────────
+  const displayAllocs = useMemo(() => {
+    let out = allocs;
+
+    // Month filter: show allocations active during selectedMonth
+    if (selectedMonth !== 'all') {
+      out = out.filter(
+        (a) =>
+          (a.valid_from === null || a.valid_from <= selectedMonth) &&
+          (a.valid_to   === null || a.valid_to   >= selectedMonth)
+      );
+    }
+
+    // Search filter
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      out = out.filter(
+        (a) =>
+          a.entity_name.toLowerCase().includes(q) ||
+          a.financial_row.toLowerCase().includes(q) ||
+          a.other_department.toLowerCase().includes(q) ||
+          (a.description ?? '').toLowerCase().includes(q)
+      );
+    }
+
+    return out;
+  }, [allocs, selectedMonth, search]);
 
   const resetForm = () => {
     setFVendor(''); setFRow(''); setFMktPct('80');
@@ -112,8 +169,8 @@ export default function IntercompanyTab() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!window.confirm('Remove this intercompany allocation?')) return;
+  const handleDelete = async (id: number, entityName: string) => {
+    if (!window.confirm(`Remove the intercompany allocation for "${entityName}"?`)) return;
     try {
       const res = await fetch('/api/intercompany/delete', {
         method: 'POST',
@@ -133,22 +190,50 @@ export default function IntercompanyTab() {
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-6 space-y-8">
+
+      {/* ── Header ── */}
       <div>
         <h2 className="text-xl font-semibold text-gray-900">Intercompany</h2>
         <p className="mt-1 text-sm text-gray-500">
           Split a vendor's GL cost between marketing and another department by percentage.
+          Use Valid From / Valid To to scope allocations to specific date ranges.
         </p>
       </div>
 
-      <div className="flex justify-end">
-        <button
-          onClick={() => { setShowForm((v) => !v); if (showForm) resetForm(); }}
-          className="rounded-md bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-        >
-          {showForm ? 'Cancel' : 'Add Allocation'}
-        </button>
+      {/* ── Filters + Add button ── */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-gray-600 whitespace-nowrap">Viewing period:</span>
+          <select
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="rounded-md border border-[var(--color-neutral)] px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+          >
+            <option value="all">All Months</option>
+            {months.map((m) => (
+              <option key={m} value={m}>{formatMonthShort(m)}</option>
+            ))}
+          </select>
+        </div>
+        <div className="h-5 w-px bg-gray-200" />
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by vendor name or GL account…"
+          className="rounded-md border border-[var(--color-neutral)] px-3 py-1.5 text-sm w-72 focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+        />
+        <div className="ml-auto">
+          <button
+            onClick={() => { setShowForm((v) => !v); if (showForm) resetForm(); }}
+            className="rounded-md bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+          >
+            {showForm ? 'Cancel' : 'Add Allocation'}
+          </button>
+        </div>
       </div>
 
+      {/* ── Add form ── */}
       {showForm && (
         <div className="rounded-lg border border-gray-200 bg-gray-50 p-5 space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -160,8 +245,13 @@ export default function IntercompanyTab() {
                 className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
               >
                 <option value="">Select vendor…</option>
-                {vendors.map((v) => <option key={v} value={v}>{v}</option>)}
+                {filteredVendors.map((v) => <option key={v} value={v}>{v}</option>)}
               </select>
+              {search && (
+                <p className="mt-0.5 text-[11px] text-gray-400">
+                  {filteredVendors.length} of {allVendors.length} vendors match
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">GL Account</label>
@@ -184,7 +274,9 @@ export default function IntercompanyTab() {
                 step={0.01}
                 value={fMktPct}
                 onChange={(e) => setFMktPct(e.target.value)}
-                className={`w-full rounded border px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] ${pctError ? 'border-red-400' : 'border-gray-300'}`}
+                className={`w-full rounded border px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] ${
+                  pctError ? 'border-red-400' : 'border-gray-300'
+                }`}
               />
             </div>
             <div>
@@ -237,7 +329,7 @@ export default function IntercompanyTab() {
           </div>
           {pctError && (
             <p className="text-xs font-medium text-red-600">
-              Marketing % must be between 0 and 100 (Other % auto-completes to 100 − Marketing %)
+              Marketing % must be between 0 and 100 (Other % = 100 − Marketing %)
             </p>
           )}
           <div className="flex gap-2">
@@ -258,6 +350,7 @@ export default function IntercompanyTab() {
         </div>
       )}
 
+      {/* ── Allocations table ── */}
       <div className="overflow-x-auto rounded-lg border border-gray-200">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -284,30 +377,40 @@ export default function IntercompanyTab() {
                   ))}
                 </tr>
               ))
-            ) : allocs.length === 0 ? (
+            ) : displayAllocs.length === 0 ? (
               <tr>
                 <td colSpan={9} className="px-4 py-8 text-center text-gray-400">
-                  No intercompany allocations defined
+                  {search
+                    ? `No allocations match "${search}"`
+                    : selectedMonth !== 'all'
+                    ? `No allocations active in ${formatMonthShort(selectedMonth)}`
+                    : 'No intercompany allocations defined'}
                 </td>
               </tr>
             ) : (
-              allocs.map((a) => (
+              displayAllocs.map((a) => (
                 <tr key={a.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 font-mono text-xs text-gray-900">{a.entity_name}</td>
                   <td className="px-4 py-3 font-mono text-xs text-gray-700">{a.financial_row}</td>
-                  <td className="px-4 py-3 tabular-nums font-medium text-gray-900">{a.marketing_pct.toFixed(1)}%</td>
+                  <td className="px-4 py-3 tabular-nums font-medium text-gray-900">
+                    {a.marketing_pct.toFixed(1)}%
+                  </td>
                   <td className="px-4 py-3">
                     <span className="inline-block rounded border border-purple-200 bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700">
                       {a.other_department}
                     </span>
                   </td>
                   <td className="px-4 py-3 tabular-nums text-gray-600">{a.other_pct.toFixed(1)}%</td>
-                  <td className="px-4 py-3 text-gray-500">{a.valid_from ?? '—'}</td>
-                  <td className="px-4 py-3 text-gray-500">{a.valid_to ?? '—'}</td>
+                  <td className="px-4 py-3 text-xs text-gray-500">
+                    {a.valid_from ? formatMonthShort(a.valid_from) : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-gray-500">
+                    {a.valid_to ? formatMonthShort(a.valid_to) : '—'}
+                  </td>
                   <td className="px-4 py-3 tabular-nums text-gray-700">{fmt(a.total_spend)}</td>
                   <td className="px-4 py-3">
                     <button
-                      onClick={() => handleDelete(a.id)}
+                      onClick={() => handleDelete(a.id, a.entity_name)}
                       className="text-xs font-medium text-red-600 hover:underline"
                     >
                       Remove
