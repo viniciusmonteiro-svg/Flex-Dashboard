@@ -21,9 +21,15 @@ export interface ChannelDetailRow {
   amount: number;
 }
 
+export interface UnclassifiedRow {
+  month_key: string;
+  amount:    number;
+}
+
 export interface ChannelDetailResponse {
-  rows: ChannelDetailRow[];
-  years: string[];
+  rows:         ChannelDetailRow[];
+  years:        string[];
+  unclassified: UnclassifiedRow[];
 }
 
 const EXCLUDED = `('Do Not Tag (COGS/Non-S&M)', 'Unclassified')`;
@@ -131,11 +137,37 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    // ── Unclassified totals (only when showing all channels) ─────────────────
+    // Queried separately so they are never mixed into the classified rows or
+    // included in the Grand Total — the client renders them as a distinct row.
+    let unclassified: UnclassifiedRow[] = [];
+    if (isAllChannels) {
+      const uParams: unknown[] = [];
+      const uConds: string[]   = [`${CHANNEL_EXPR} = 'Unclassified'`];
+      if (fromParam)   { uParams.push(fromParam);    uConds.push(`${PERIOD} >= $${uParams.length}`); }
+      if (toParam)     { uParams.push(toParam);      uConds.push(`${PERIOD} <= $${uParams.length}`); }
+      if (!fromParam && !toParam) {
+        if (monthKeyParam)   { uParams.push(monthKeyParam); uConds.push(`${PERIOD} = $${uParams.length}`); }
+        else if (yearFilter) { uParams.push(yearFilter);    uConds.push(`LEFT(${PERIOD}, 4) = $${uParams.length}`); }
+      }
+      const uRaw = await query<{ month_key: string; amount: string }>(
+        `SELECT ${PERIOD} AS month_key, SUM(${INTERCOMPANY_AMOUNT_EXPR}) / 100 AS amount
+         FROM netsuite_actuals n
+         ${CLASSIFICATION_JOINS}
+         ${buildIntercompanyJoin(PERIOD)}
+         WHERE ${uConds.join(' AND ')}
+         GROUP BY ${PERIOD}
+         ORDER BY ${PERIOD}`,
+        uParams
+      );
+      unclassified = uRaw.map((r) => ({ month_key: r.month_key, amount: Number(r.amount) }));
+    }
+
     const yearSet = new Set<string>();
     rows.forEach((r) => yearSet.add(r.month_key.slice(0, 4)));
     const years = [...yearSet].sort();
 
-    return NextResponse.json({ rows, years } satisfies ChannelDetailResponse);
+    return NextResponse.json({ rows, years, unclassified } satisfies ChannelDetailResponse);
   } catch (err) {
     console.error('[api/channel-costs]', err);
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });

@@ -432,14 +432,19 @@ interface ChannelGroup {
   glGroups: GlGroup[];
 }
 
-function AllChannelsView({ rows, view, allinSmRows = [] }: {
-  rows: ChannelDetailRow[];
-  view: View;
-  allinSmRows?: { month_key: string; total_sm: number }[];
+function AllChannelsView({ rows, view, allinSmRows = [], unclassified = [] }: {
+  rows:           ChannelDetailRow[];
+  view:           View;
+  allinSmRows?:   { month_key: string; total_sm: number }[];
+  unclassified?:  { month_key: string; amount: number }[];
 }) {
   const [openChannels, setOpenChannels] = useState<Set<string>>(new Set());
 
-  const { groups, periods, grandValues, grandTotal, smValues, smTotal } = useMemo(() => {
+  const {
+    groups, periods, grandValues, grandTotal,
+    smValues, smTotal,
+    unclassifiedValues, unclassifiedTotal, hasUnclassified,
+  } = useMemo(() => {
     const periodSet = new Set<string>();
     rows.forEach((r) => periodSet.add(monthKeyToPeriod(r.month_key, view)));
     const sortedPeriods = sortPeriods([...periodSet], view);
@@ -475,7 +480,7 @@ function AllChannelsView({ rows, view, allinSmRows = [] }: {
 
     const gv = sortedPeriods.map((_, i) => sorted.reduce((s, g) => s + g.periodTotals[i], 0));
 
-    // Compute All-in S&M per display period
+    // All-in S&M per display period
     const smByPeriod = new Map<string, number>();
     for (const r of allinSmRows) {
       const label = monthKeyToPeriod(r.month_key, view);
@@ -484,8 +489,23 @@ function AllChannelsView({ rows, view, allinSmRows = [] }: {
     const smValues = sortedPeriods.map(period => smByPeriod.get(period) ?? null);
     const smTotal  = smValues.reduce<number>((s, v) => s + (v ?? 0), 0) || null;
 
-    return { groups: sorted, periods: sortedPeriods, grandValues: gv, grandTotal: gv.reduce((s, v) => s + v, 0), smValues, smTotal };
-  }, [rows, view, allinSmRows]);
+    // Unclassified per display period
+    const uByPeriod = new Map<string, number>();
+    for (const r of unclassified) {
+      const label = monthKeyToPeriod(r.month_key, view);
+      uByPeriod.set(label, (uByPeriod.get(label) ?? 0) + r.amount);
+    }
+    const unclassifiedValues = sortedPeriods.map(p => uByPeriod.get(p) ?? 0);
+    const unclassifiedTotal  = unclassifiedValues.reduce((s, v) => s + v, 0);
+    const hasUnclassified    = unclassifiedTotal > 0;
+
+    return {
+      groups: sorted, periods: sortedPeriods, grandValues: gv,
+      grandTotal: gv.reduce((s, v) => s + v, 0),
+      smValues, smTotal,
+      unclassifiedValues, unclassifiedTotal, hasUnclassified,
+    };
+  }, [rows, view, allinSmRows, unclassified]);
 
   const latestIdx = periods.length - 1;
   const scrollRef = useAutoScrollRight([periods]);
@@ -560,9 +580,39 @@ function AllChannelsView({ rows, view, allinSmRows = [] }: {
             })}
           </tbody>
           <tfoot>
-            <tr className="bg-[var(--color-primary)] text-white">
-              <td className="sticky left-0 z-10 bg-[var(--color-primary)] px-4 py-3 text-left font-bold">
-                Grand Total
+            {/* ── Unclassified row ── */}
+            {hasUnclassified && (
+              <tr className="border-t-2 border-gray-200 bg-gray-50">
+                <td className="sticky left-0 z-10 bg-gray-50 px-4 py-2.5 text-left text-sm italic text-[var(--color-neutral)]">
+                  Unclassified
+                </td>
+                {unclassifiedValues.map((v, i) => (
+                  <td
+                    key={i}
+                    className={cn(
+                      'px-4 py-2.5 text-right tabular-nums text-sm italic whitespace-nowrap',
+                      i === latestIdx && 'bg-gray-100',
+                      v === 0 ? 'text-gray-300' : 'text-[var(--color-neutral)]'
+                    )}
+                  >
+                    {v === 0 ? '—' : fmt(v)}
+                  </td>
+                ))}
+                <td className="px-4 py-2.5 text-right tabular-nums text-sm italic font-medium text-[var(--color-neutral)] whitespace-nowrap">
+                  {fmt(unclassifiedTotal)}
+                </td>
+                <td />
+              </tr>
+            )}
+            {/* ── Grand Total ── */}
+            <tr className="border-t-2 border-gray-200 bg-[var(--color-primary)] text-white">
+              <td className="sticky left-0 z-10 bg-[var(--color-primary)] px-4 py-3 text-left">
+                <span className="font-bold">Grand Total</span>
+                {hasUnclassified && (
+                  <div className="text-[10px] font-normal opacity-70 mt-0.5">
+                    * Excludes Unclassified costs
+                  </div>
+                )}
               </td>
               {grandValues.map((v, i) => (
                 <td key={i} className="px-4 py-3 text-right tabular-nums font-bold whitespace-nowrap">
@@ -2563,7 +2613,7 @@ export default function ChannelCostsClient() {
               No data for the selected filters.
             </div>
           ) : channel === 'all' ? (
-            <AllChannelsView rows={data.rows} view={view} />
+            <AllChannelsView rows={data.rows} view={view} unclassified={data.unclassified ?? []} />
           ) : (
             <PivotTable rows={data.rows} view={view} />
           )
@@ -2719,7 +2769,7 @@ export default function ChannelCostsClient() {
                 No data for the selected filters.
               </div>
             ) : channel === 'all' ? (
-              <AllChannelsView rows={data.rows} view={view} allinSmRows={cacDataCd?.total_sm_rows ?? []} />
+              <AllChannelsView rows={data.rows} view={view} allinSmRows={cacDataCd?.total_sm_rows ?? []} unclassified={data.unclassified ?? []} />
             ) : (
               <PivotTable rows={data.rows} view={view} allinSmRows={cacDataCd?.total_sm_rows ?? []} />
             )
