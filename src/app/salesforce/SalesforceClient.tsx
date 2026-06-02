@@ -628,6 +628,37 @@ function CloseDateTable({
   );
 }
 
+// ─── SparkBar ─────────────────────────────────────────────────────────────────
+// Tiny bar-chart sparkline used inside KPI cards to show period-over-period trend.
+function SparkBar({ values, color }: { values: (number | null)[]; color: string }) {
+  const valid = values.filter((v): v is number => v !== null && isFinite(v));
+  if (valid.length < 2) return null;
+  const max = Math.max(...valid);
+  if (max === 0) return null;
+  const H = 20;
+  const totalW = 60;
+  const barW = Math.max(2, Math.floor(totalW / values.length) - 1);
+  return (
+    <svg width={totalW} height={H} style={{ display: 'block', flexShrink: 0 }}>
+      {values.map((v, i) => {
+        const h = v !== null && isFinite(v) ? Math.max(1, (v / max) * H) : 0;
+        return (
+          <rect
+            key={i}
+            x={i * (barW + 1)}
+            y={H - h}
+            width={barW}
+            height={h}
+            fill={v !== null && v > 0 ? color : '#e2e8f0'}
+            opacity={v !== null && v > 0 ? 0.75 : 0.25}
+            rx={1}
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
 // ─── main component ───────────────────────────────────────────────────────────
 
 export default function SalesforceClient() {
@@ -669,8 +700,19 @@ export default function SalesforceClient() {
   // ── KPI totals derived from cohort ────────────────────────────────────────
   const kpiTotalDemoed  = cohort?.totals.reduce((s, c) => s + c.demoed,  0) ?? 0;
   const kpiTotalCreated = cohort?.totals.reduce((s, c) => s + c.created, 0) ?? 0;
+  const kpiTotalWon     = cohort?.totals.reduce((s, c) => s + c.won,     0) ?? 0;
   const kpiShowRate     = kpiTotalCreated > 0
     ? (kpiTotalDemoed / kpiTotalCreated) * 100 : 0;
+  const kpiCohortWinRate = kpiTotalCreated > 0
+    ? (kpiTotalWon / kpiTotalCreated) * 100 : null;
+  const kpiWonPerDemoed  = kpiTotalDemoed > 0
+    ? (kpiTotalWon / kpiTotalDemoed) * 100 : null;
+
+  // Per-period sparkline data
+  const winRateTrend    = cohort?.totals.map((c) =>
+    c.created > 0 ? (c.won / c.created) * 100 : null) ?? [];
+  const wonDemoedTrend  = cohort?.totals.map((c) =>
+    c.demoed  > 0 ? (c.won / c.demoed)  * 100 : null) ?? [];
 
   const isQoQ = preset === 'qoq';
 
@@ -1061,6 +1103,88 @@ export default function SalesforceClient() {
                 <span className="text-xs" style={{ color: '#94a3b8' }}>
                   {periodLabel}
                 </span>
+              )}
+            </div>
+
+            {/* ── Card 3: Cohort Win Rate ───────────────────────────────── */}
+            <div
+              className="rounded-xl px-5 py-4 flex flex-col gap-1 shadow-sm"
+              style={{ background: '#ffffff', border: '1px solid #e2e8f0' }}
+            >
+              <div className="flex items-center gap-1.5">
+                <span
+                  className="text-xs font-bold uppercase tracking-wider"
+                  style={{ color: 'var(--color-neutral)' }}
+                >
+                  Cohort Win Rate
+                </span>
+                <span
+                  title="Closed Won ÷ Total Opportunities Created"
+                  style={{ fontSize: 12, color: '#cbd5e1', cursor: 'help', userSelect: 'none', lineHeight: 1 }}
+                  aria-label="Cohort Win Rate definition"
+                >
+                  ⓘ
+                </span>
+              </div>
+              <span
+                className="text-2xl font-bold tabular-nums"
+                style={{ color: loadingCohort ? '#cbd5e1' : '#22c55e' }}
+              >
+                {loadingCohort ? '—' : kpiCohortWinRate === null ? '—' : `${kpiCohortWinRate.toFixed(1)}%`}
+              </span>
+              <span className="text-xs" style={{ color: 'var(--color-neutral)' }}>
+                closed won ÷ created
+              </span>
+              {periodLabel && (
+                <span className="text-xs" style={{ color: '#94a3b8' }}>
+                  {periodLabel}
+                </span>
+              )}
+              {!loadingCohort && winRateTrend.length > 1 && (
+                <div className="mt-1">
+                  <SparkBar values={winRateTrend} color="#22c55e" />
+                </div>
+              )}
+            </div>
+
+            {/* ── Card 4: Won / Demoed ─────────────────────────────────── */}
+            <div
+              className="rounded-xl px-5 py-4 flex flex-col gap-1 shadow-sm"
+              style={{ background: '#ffffff', border: '1px solid #e2e8f0' }}
+            >
+              <div className="flex items-center gap-1.5">
+                <span
+                  className="text-xs font-bold uppercase tracking-wider"
+                  style={{ color: 'var(--color-neutral)' }}
+                >
+                  Won / Demoed
+                </span>
+                <span
+                  title="Closed Won ÷ Demoed Opportunities"
+                  style={{ fontSize: 12, color: '#cbd5e1', cursor: 'help', userSelect: 'none', lineHeight: 1 }}
+                  aria-label="Won / Demoed definition"
+                >
+                  ⓘ
+                </span>
+              </div>
+              <span
+                className="text-2xl font-bold tabular-nums"
+                style={{ color: loadingCohort ? '#cbd5e1' : '#14b8a6' }}
+              >
+                {loadingCohort ? '—' : kpiWonPerDemoed === null ? '—' : `${kpiWonPerDemoed.toFixed(1)}%`}
+              </span>
+              <span className="text-xs" style={{ color: 'var(--color-neutral)' }}>
+                closed won ÷ demoed
+              </span>
+              {periodLabel && (
+                <span className="text-xs" style={{ color: '#94a3b8' }}>
+                  {periodLabel}
+                </span>
+              )}
+              {!loadingCohort && wonDemoedTrend.length > 1 && (
+                <div className="mt-1">
+                  <SparkBar values={wonDemoedTrend} color="#14b8a6" />
+                </div>
               )}
             </div>
           </div>
