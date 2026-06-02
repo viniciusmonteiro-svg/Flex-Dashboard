@@ -452,6 +452,9 @@ export default function IntercompanyTab() {
                           }}
                           className="w-20 rounded border border-[var(--color-neutral)] px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] disabled:opacity-50"
                         />
+                        <span className="text-xs tabular-nums text-gray-500 whitespace-nowrap">
+                          {formatCurrency(row.total_amount * row.marketing_pct)}
+                        </span>
                         {isPending && (
                           <span className="inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
                             unsaved
