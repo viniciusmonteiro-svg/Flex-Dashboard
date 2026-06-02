@@ -30,7 +30,7 @@ import IntercompanyTab         from './IntercompanyTab';
 
 type Subtab = 'vendor' | 'adjustment' | 'intercompany';
 const SUBTAB_LABELS: Record<Subtab, string> = {
-  vendor:       'Vendor Classification',
+  vendor:       'G&L Reclass',
   adjustment:   'Department Adjustment',
   intercompany: 'Intercompany',
 };
