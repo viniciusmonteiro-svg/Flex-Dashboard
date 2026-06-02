@@ -10,7 +10,7 @@ const TABS = [
   { label: 'Dashboard',             href: '/dashboard'              },
   { label: 'Channel Economics',     href: '/channel-costs'          },
   { label: 'Pipeline',              href: '/salesforce'             },
-  { label: 'Vendor Classification', href: '/vendor-classifications' },
+  { label: 'Allocation Center',     href: '/vendor-classifications' },
   { label: 'Data Management',       href: '/data-management'        },
 ] as const;
 
