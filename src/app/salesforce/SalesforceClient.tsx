@@ -1106,7 +1106,7 @@ export default function SalesforceClient() {
               )}
             </div>
 
-            {/* ── Card 3: Won / Demoed ─────────────────────────────────── */}
+            {/* ── Card 3: Demo Conversion ─────────────────────────────────── */}
             <div
               className="rounded-xl px-5 py-4 flex flex-col gap-1 shadow-sm"
               style={{ background: '#ffffff', border: '1px solid #e2e8f0' }}
@@ -1116,12 +1116,12 @@ export default function SalesforceClient() {
                   className="text-xs font-bold uppercase tracking-wider"
                   style={{ color: 'var(--color-neutral)' }}
                 >
-                  Won / Demoed
+                  Demo Conversion
                 </span>
                 <span
                   title="Closed Won ÷ Demoed Opportunities"
                   style={{ fontSize: 12, color: '#cbd5e1', cursor: 'help', userSelect: 'none', lineHeight: 1 }}
-                  aria-label="Won / Demoed definition"
+                  aria-label="Demo Conversion definition"
                 >
                   ⓘ
                 </span>
