@@ -5,8 +5,7 @@
  *  1. Raw netsuite_actuals amounts
  *  2. vendor_classifications / vendor_classification_history (CLASSIFICATION_JOINS)
  *  3. intercompany_allocations  ← buildIntercompanyJoin + INTERCOMPANY_AMOUNT_EXPR
- *  4. gl_reclassifications      ← buildGLExclusionClause
- *  5. department_adjustments    ← applyDepartmentAdjustments() (post-aggregation)
+ *  4. department_adjustments    ← applyDepartmentAdjustments() (post-aggregation)
  */
 
 import { query } from '@/db/query';
@@ -31,24 +30,6 @@ export function buildIntercompanyJoin(periodExpr: string): string {
 export const INTERCOMPANY_AMOUNT_EXPR =
   `CASE WHEN ia.id IS NOT NULL THEN n.amount * ia.marketing_pct / 100.0 ELSE n.amount END`;
 
-/**
- * Period- and entity-aware GL exclusion clause.
- * Excludes netsuite_actuals rows that have a matching reclassification where:
- *   • the period matches (month_key IS NULL = all periods, or month_key = current period)
- *   • the entity matches:
- *       entity_name = ''           → legacy all-entity entry, excludes every vendor
- *       entity_name = n.entity_name → excludes only that specific vendor
- *
- * Add to WHERE (with AND).
- */
-export function buildGLExclusionClause(periodExpr: string): string {
-  return `NOT EXISTS (
-    SELECT 1 FROM gl_reclassifications gr
-    WHERE gr.financial_row = n.financial_row
-      AND (gr.entity_name = '' OR gr.entity_name = n.entity_name)
-      AND (gr.month_key IS NULL OR gr.month_key = ${periodExpr})
-  )`;
-}
 
 /**
  * After aggregating to channel totals (dollars), fetch department_adjustments

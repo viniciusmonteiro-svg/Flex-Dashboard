@@ -3,7 +3,7 @@ import { initDb } from '@/db/init';
 import { query } from '@/db/query';
 import { CLASSIFICATION_JOINS, CHANNEL_EXPR } from '@/lib/classifyVendor';
 import { buildPeriodExpr } from '@/lib/periodExpr';
-import { buildIntercompanyJoin, INTERCOMPANY_AMOUNT_EXPR, buildGLExclusionClause } from '@/lib/channelCostQuery';
+import { buildIntercompanyJoin, INTERCOMPANY_AMOUNT_EXPR } from '@/lib/channelCostQuery';
 
 export interface KpiSummaryRow {
   metric:      string;
@@ -118,7 +118,7 @@ export async function GET(req: NextRequest) {
        FROM netsuite_actuals n
        ${CLASSIFICATION_JOINS}
        ${buildIntercompanyJoin(NS_RAW)}
-       WHERE ${[...nsConds, buildGLExclusionClause(NS_RAW)].join(' AND ')}
+       WHERE ${nsConds.join(' AND ')}
        GROUP BY ${nsGroupExpr}
        ORDER BY MIN(${NS_RAW})`,
       nsParams,

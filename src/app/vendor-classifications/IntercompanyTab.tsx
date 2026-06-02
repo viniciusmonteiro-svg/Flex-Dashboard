@@ -6,7 +6,15 @@ import { ToastContainer, type ToastItem } from '@/components/ui/Toast';
 import { useUnsavedChanges } from '@/lib/UnsavedChangesContext';
 import type { VendorClassificationRow } from '@/app/api/vendor-classifications/route';
 
-const DEPARTMENTS = ['Sales', 'Technology', 'Development', 'Administration', 'Finance', 'Other'] as const;
+const DEPARTMENTS = [
+  'Administration',
+  'Development',
+  'Implementation',
+  'Information',
+  'Marketing',
+  'Support',
+  'Technology',
+] as const;
 
 interface Allocation {
   id:               number;

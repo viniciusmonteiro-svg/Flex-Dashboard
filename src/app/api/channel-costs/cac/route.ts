@@ -3,7 +3,7 @@ import { initDb } from '@/db/init';
 import { query } from '@/db/query';
 import { CLASSIFICATION_JOINS, CHANNEL_EXPR } from '@/lib/classifyVendor';
 import { buildPeriodExpr } from '@/lib/periodExpr';
-import { buildIntercompanyJoin, INTERCOMPANY_AMOUNT_EXPR, buildGLExclusionClause } from '@/lib/channelCostQuery';
+import { buildIntercompanyJoin, INTERCOMPANY_AMOUNT_EXPR } from '@/lib/channelCostQuery';
 
 export interface CacCostRow {
   channel:   string;   // NetSuite display channel
@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
        FROM netsuite_actuals n
        ${CLASSIFICATION_JOINS}
        ${buildIntercompanyJoin(PERIOD)}
-       WHERE ${[...costConds, buildGLExclusionClause(PERIOD)].join(' AND ')}
+       WHERE ${costConds.join(' AND ')}
        GROUP BY ${CHANNEL_EXPR}, ${PERIOD}
        ORDER BY ${CHANNEL_EXPR}, ${PERIOD}`,
       costParams

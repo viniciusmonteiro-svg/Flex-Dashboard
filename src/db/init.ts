@@ -297,39 +297,8 @@ END $mig$;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_dept_adj_channel_null  ON department_adjustments (channel) WHERE month_key IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_dept_adj_channel_month ON department_adjustments (channel, month_key) WHERE month_key IS NOT NULL;
 
--- ── GL Reclassifications ─────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS gl_reclassifications (
-  id            SERIAL PRIMARY KEY,
-  financial_row TEXT NOT NULL UNIQUE,
-  from_channel  TEXT NOT NULL DEFAULT '',
-  to_department TEXT NOT NULL,
-  description   TEXT,
-  created_at    TIMESTAMPTZ DEFAULT NOW()
-);
-CREATE INDEX IF NOT EXISTS idx_gl_reclass_row ON gl_reclassifications(financial_row);
-
--- Migration: add month_key to gl_reclassifications for period-specific reclassifications.
-ALTER TABLE gl_reclassifications ADD COLUMN IF NOT EXISTS month_key TEXT;
-DO $mig$
-BEGIN
-  -- Drop old single-column unique constraint on financial_row
-  IF EXISTS (
-    SELECT 1 FROM pg_constraint
-    WHERE conname = 'gl_reclassifications_financial_row_key'
-      AND conrelid = 'gl_reclassifications'::regclass
-  ) THEN
-    ALTER TABLE gl_reclassifications DROP CONSTRAINT gl_reclassifications_financial_row_key;
-  END IF;
-END $mig$;
--- Migration: add entity_name to gl_reclassifications for per-vendor reclassification.
--- Default '' = legacy "all entities for this GL account" (backward-compatible).
-ALTER TABLE gl_reclassifications ADD COLUMN IF NOT EXISTS entity_name TEXT NOT NULL DEFAULT '';
-
--- Drop old partial indexes (financial_row only) and recreate including entity_name.
-DROP INDEX IF EXISTS idx_gl_reclass_row_null;
-DROP INDEX IF EXISTS idx_gl_reclass_row_month;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_gl_reclass_entity_null  ON gl_reclassifications (financial_row, entity_name) WHERE month_key IS NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_gl_reclass_entity_month ON gl_reclassifications (financial_row, entity_name, month_key) WHERE month_key IS NOT NULL;
+-- Cleanup: gl_reclassifications feature removed — drop table if it exists from a prior install.
+DROP TABLE IF EXISTS gl_reclassifications;
 
 -- ── Intercompany allocations ─────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS intercompany_allocations (

@@ -26,17 +26,15 @@ import { ToastContainer, type ToastItem } from '@/components/ui/Toast';
 import { PreviewModal, type PendingChange } from '@/components/ui/PreviewModal';
 import { useUnsavedChanges } from '@/lib/UnsavedChangesContext';
 import DepartmentAdjustmentTab from './DepartmentAdjustmentTab';
-import GLReclassificationTab   from './GLReclassificationTab';
 import IntercompanyTab         from './IntercompanyTab';
 
-type Subtab = 'vendor' | 'adjustment' | 'gl' | 'intercompany';
+type Subtab = 'vendor' | 'adjustment' | 'intercompany';
 const SUBTAB_LABELS: Record<Subtab, string> = {
   vendor:       'Vendor Classification',
   adjustment:   'Department Adjustment',
-  gl:           'G&L Reclassification',
   intercompany: 'Intercompany',
 };
-const ALL_SUBTABS: Subtab[] = ['vendor', 'adjustment', 'gl', 'intercompany'];
+const ALL_SUBTABS: Subtab[] = ['vendor', 'adjustment', 'intercompany'];
 
 const CHANNELS = [
   'Paid Search',
@@ -481,7 +479,6 @@ export default function VendorClassificationsClient() {
 
       {/* ── Vendor Classification tab ── */}
       {activeSubtab === 'adjustment'   && <DepartmentAdjustmentTab />}
-      {activeSubtab === 'gl'           && <GLReclassificationTab />}
       {activeSubtab === 'intercompany' && <IntercompanyTab />}
 
       {activeSubtab === 'vendor' && (
