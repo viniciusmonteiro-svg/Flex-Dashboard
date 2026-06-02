@@ -6,15 +6,14 @@ import { ToastContainer, type ToastItem } from '@/components/ui/Toast';
 import { useUnsavedChanges } from '@/lib/UnsavedChangesContext';
 import type { VendorClassificationRow } from '@/app/api/vendor-classifications/route';
 
-const DEPARTMENTS = [
-  'Administration',
-  'Development',
-  'Implementation',
-  'Information',
-  'Marketing',
-  'Support',
-  'Technology',
+// Departments and legal entities that can receive a cost allocation.
+// Kept as a flat array so DEPARTMENTS[0] is the default value.
+const DEPT_OPTIONS = [
+  { group: 'Departments', options: ['Administration', 'Development', 'Implementation', 'Information', 'Marketing', 'Support', 'Technology'] },
+  { group: 'Legal Entities', options: ['DHQ', 'Flex Dental'] },
 ] as const;
+
+const DEPARTMENTS = DEPT_OPTIONS.flatMap((g) => g.options) as unknown as string[];
 
 interface Allocation {
   id:               number;
@@ -373,7 +372,7 @@ export default function IntercompanyTab() {
               <th className="px-4 py-3">Total Spend</th>
               <th className="px-4 py-3">Months</th>
               <th className="px-4 py-3">Marketing %</th>
-              <th className="px-4 py-3">Other Department</th>
+              <th className="px-4 py-3">Allocated To</th>
               <th className="px-4 py-3">Other %</th>
               <th className="px-4 py-3">Valid From</th>
               <th className="px-4 py-3">Valid To</th>
@@ -463,7 +462,7 @@ export default function IntercompanyTab() {
                       </div>
                     </td>
 
-                    {/* Other Department */}
+                    {/* Allocated To */}
                     <td className="px-4 py-2.5">
                       {isSplit ? (
                         <select
@@ -472,7 +471,11 @@ export default function IntercompanyTab() {
                           onChange={(e) => handleRowChange(row, { other_department: e.target.value })}
                           className="rounded border border-[var(--color-neutral)] px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] disabled:opacity-50"
                         >
-                          {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
+                          {DEPT_OPTIONS.map((g) => (
+                            <optgroup key={g.group} label={g.group}>
+                              {g.options.map((d) => <option key={d} value={d}>{d}</option>)}
+                            </optgroup>
+                          ))}
                         </select>
                       ) : (
                         <span className="text-gray-400 text-xs">—</span>
@@ -575,7 +578,7 @@ export default function IntercompanyTab() {
                   <th className="pb-2 pr-3">Vendor</th>
                   <th className="pb-2 pr-3">GL Account</th>
                   <th className="pb-2 pr-3">Mkt %</th>
-                  <th className="pb-2 pr-3">Other Dept</th>
+                  <th className="pb-2 pr-3">Allocated To</th>
                   <th className="pb-2 pr-3">Other %</th>
                   <th className="pb-2">Valid From→To</th>
                 </tr>

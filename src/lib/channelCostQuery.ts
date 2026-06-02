@@ -32,6 +32,30 @@ export const INTERCOMPANY_AMOUNT_EXPR =
 
 
 /**
+ * Fetch period-specific department_adjustments for a given set of YYYY-MM periods.
+ * Null-month_key adjustments are excluded here — they cannot be cleanly distributed
+ * across individual periods without ambiguity.
+ *
+ * Returns a Map keyed by "channel||YYYY-MM" → dollar amount (already ÷100).
+ * Use this to inject adjustments into per-period cost arrays.
+ */
+export async function fetchPeriodAdjustments(
+  periods: string[]
+): Promise<Map<string, number>> {
+  if (periods.length === 0) return new Map();
+  const rows = await query<{ channel: string; month_key: string; amount: string }>(
+    `SELECT channel, month_key, SUM(amount) / 100.0 AS amount
+     FROM department_adjustments
+     WHERE month_key IS NOT NULL
+       AND month_key = ANY($1::text[])
+     GROUP BY channel, month_key
+     HAVING SUM(amount) != 0`,
+    [periods]
+  );
+  return new Map(rows.map((r) => [`${r.channel}||${r.month_key}`, Number(r.amount)]));
+}
+
+/**
  * After aggregating to channel totals (dollars), fetch department_adjustments
  * and add the fixed dollar amount to each matching channel.
  *

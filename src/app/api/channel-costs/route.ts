@@ -3,7 +3,7 @@ import { initDb } from '@/db/init';
 import { query } from '@/db/query';
 import { CLASSIFICATION_JOINS, CHANNEL_EXPR } from '@/lib/classifyVendor';
 import { buildPeriodExpr } from '@/lib/periodExpr';
-import { buildIntercompanyJoin, INTERCOMPANY_AMOUNT_EXPR } from '@/lib/channelCostQuery';
+import { buildIntercompanyJoin, INTERCOMPANY_AMOUNT_EXPR, fetchPeriodAdjustments } from '@/lib/channelCostQuery';
 
 interface RawRow {
   channel?: string;
@@ -105,6 +105,31 @@ export async function GET(req: NextRequest) {
       month_key:     r.month_key,
       amount:        Number(r.amount),
     }));
+
+    // ── Department adjustments ─────────────────────────────────────────────────
+    // Inject period-specific adjustments as synthetic rows so the client's
+    // channel-total computation naturally includes them. Only month-keyed
+    // adjustments are distributed here; null-month adjustments are not period-
+    // distributable and are therefore omitted from per-period queries.
+    const resultPeriods = [...new Set(rows.map((r) => r.month_key))];
+    const adjMap = await fetchPeriodAdjustments(resultPeriods);
+    for (const [key, amount] of adjMap) {
+      const [adjChannel, month_key] = key.split('||');
+      // Filter: only inject for the queried channel (or all channels)
+      const channelMatches =
+        isAllChannels ||
+        adjChannel === channelParam ||
+        (channelParam === 'Referral/Partner' &&
+          (adjChannel === 'Referral' || adjChannel === 'Partner'));
+      if (!channelMatches) continue;
+      rows.push({
+        ...(isAllChannels ? { channel: adjChannel } : {}),
+        financial_row: '— Adjustment',
+        entity_name:   '',
+        month_key,
+        amount,
+      });
+    }
 
     const yearSet = new Set<string>();
     rows.forEach((r) => yearSet.add(r.month_key.slice(0, 4)));
