@@ -29,15 +29,25 @@ export interface KpiItem {
 export interface KpiResponse {
   periods: string[];
   kpis: {
-    opportunities: KpiItem;
-    demoed:        KpiItem;
-    new_business:  KpiItem;
-    upsell:        KpiItem;
-    show_rate:     KpiItem;
+    opportunities:   KpiItem;
+    demoed:          KpiItem;
+    new_business:    KpiItem;
+    upsell:          KpiItem;
+    show_rate:       KpiItem;
+    demo_conversion: KpiItem;
+    cohort_win_rate: KpiItem;
   };
 }
 
 // ─── Period helpers ───────────────────────────────────────────────────────────
+
+/** Same bucketing but applied to close_date → YYYY-MM string */
+function closeDatePeriodExpr(view: View): string {
+  const m = `TO_CHAR(close_date, 'YYYY-MM')`;
+  if (view === 'quarterly') return `LEFT(${m}, 4) || '-Q' || CEIL(RIGHT(${m}, 2)::int / 3.0)::int`;
+  if (view === 'yearly')    return `LEFT(${m}, 4)`;
+  return m;
+}
 
 function periodGroupExpr(view: View): string {
   if (view === 'quarterly') {
@@ -218,6 +228,45 @@ export async function GET(req: NextRequest) {
       by_channel: [],
     }));
 
+    // ── Closed Won by close_date (for Demo Conversion + Cohort Win Rate) ─────
+    const cdPeriodExpr = closeDatePeriodExpr(view);
+    const wonRows = await query<{ period_key: string; closed_won: string }>(
+      `SELECT
+         ${cdPeriodExpr}                                             AS period_key,
+         COUNT(*) FILTER (WHERE stage = 'Closed Won'
+           AND COALESCE(NULLIF(TRIM(primary_channel), ''), 'Unclassified')
+               NOT IN ('Unclassified'))                              AS closed_won
+       FROM salesforce_opportunities
+       WHERE close_date IS NOT NULL
+         AND ($1::text IS NULL OR TO_CHAR(close_date, 'YYYY-MM') >= $1)
+         AND ($2::text IS NULL OR TO_CHAR(close_date, 'YYYY-MM') <= $2)
+       GROUP BY 1
+       ORDER BY 1`,
+      [from, to]
+    );
+
+    // Map period_key → closed_won (period_keys produced by closeDatePeriodExpr
+    // align with those from periodGroupExpr when the same view is used)
+    const wonMap = new Map<string, number>(
+      wonRows.map((r) => [r.period_key, Number(r.closed_won)])
+    );
+    const totalWon      = wonRows.reduce((s, r) => s + Number(r.closed_won), 0);
+    const totalDemoed   = rows.reduce((s, r) => s + Number(r.demoed),  0);
+    const totalCreated  = rows.reduce((s, r) => s + Number(r.opportunities), 0);
+
+    // Per-period rate trends — numerator from close_date map, denominator from cohort rows
+    const demoConvTrend: KpiTrend[] = rows.map((r, i) => {
+      const won    = wonMap.get(r.period_key) ?? 0;
+      const demoed = Number(r.demoed);
+      return { period: periods[i], value: demoed > 0 ? Math.round(1000 * won / demoed) / 10 : 0, by_channel: [] };
+    });
+
+    const winRateTrend: KpiTrend[] = rows.map((r, i) => {
+      const won  = wonMap.get(r.period_key) ?? 0;
+      const opps = Number(r.opportunities);
+      return { period: periods[i], value: opps > 0 ? Math.round(1000 * won / opps) / 10 : 0, by_channel: [] };
+    });
+
     const last = rows.length - 1;
     const lastRow = last >= 0 ? rows[last] : null;
 
@@ -245,6 +294,14 @@ export async function GET(req: NextRequest) {
             ? Math.round(1000 * Number(lastRow.demoed) / Number(lastRow.opportunities)) / 10
             : 0,
           trend: showRateTrend,
+        },
+        demo_conversion: {
+          current: totalDemoed > 0 ? Math.round(1000 * totalWon / totalDemoed) / 10 : 0,
+          trend:   demoConvTrend,
+        },
+        cohort_win_rate: {
+          current: totalCreated > 0 ? Math.round(1000 * totalWon / totalCreated) / 10 : 0,
+          trend:   winRateTrend,
         },
       },
     } satisfies KpiResponse);

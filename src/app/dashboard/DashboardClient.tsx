@@ -30,11 +30,13 @@ type Preset = '6m' | '12m' | '24m' | 'qoq' | 'all';
 // ─── Accent colors (the only five hardcoded colors) ───────────────────────────
 
 const ACCENT = {
-  opportunities: '#3b82f6',
-  demoed:        '#a855f7',
-  new_business:  '#22c55e',
-  upsell:        '#f97316',
-  show_rate:     '#14b8a6',
+  opportunities:   '#3b82f6',
+  demoed:          '#a855f7',
+  new_business:    '#22c55e',
+  upsell:          '#f97316',
+  show_rate:       '#14b8a6',
+  demo_conversion: '#14b8a6',
+  cohort_win_rate: '#22c55e',
 } as const;
 
 // ─── Channel colors & order (mirrors Pipeline Cohort / channel-chart) ─────────
@@ -411,10 +413,7 @@ function KpiCard({ label, tooltip, value, color, trend, isRate = false, field, l
       {loading ? (
         <div className="animate-pulse" style={{ height: 90, borderRadius: 6, background: '#e2e8f0' }} />
       ) : field ? (
-        <>
-          <StackedSparkline data={trend} field={field} />
-          <ChannelLegend channels={legendChannels} />
-        </>
+        <StackedSparkline data={trend} field={field} />
       ) : (
         <Sparkline data={trend} color={color} isRate={isRate} />
       )}
@@ -1594,6 +1593,24 @@ export default function DashboardClient() {
           value={kpis?.show_rate.current ?? 0}
           color={ACCENT.show_rate}
           trend={kpis?.show_rate.trend ?? []}
+          isRate
+          loading={loading}
+        />
+        <KpiCard
+          label="Demo Conversion"
+          tooltip="Closed Won ÷ Demoed Opportunities"
+          value={kpis?.demo_conversion.current ?? 0}
+          color={ACCENT.demo_conversion}
+          trend={kpis?.demo_conversion.trend ?? []}
+          isRate
+          loading={loading}
+        />
+        <KpiCard
+          label="Cohort Win Rate"
+          tooltip="Closed Won ÷ Total Opportunities Created"
+          value={kpis?.cohort_win_rate.current ?? 0}
+          color={ACCENT.cohort_win_rate}
+          trend={kpis?.cohort_win_rate.trend ?? []}
           isRate
           loading={loading}
         />
