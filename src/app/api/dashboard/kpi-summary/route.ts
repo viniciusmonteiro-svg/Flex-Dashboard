@@ -57,6 +57,17 @@ function rowAvg(vals: (number | null)[]): number | null {
   return nums.reduce((a, b) => a + b, 0) / nums.length;
 }
 
+/**
+ * TypeScript mirror of the SQL periodGroupExpr function.
+ * Converts a YYYY-MM month key to the same sortable period key the SQL produces,
+ * so department_adjustments (stored as month_key) can be bucketed correctly.
+ */
+function monthKeyToPeriodKey(mk: string, view: string): string {
+  if (view === 'yearly')    return mk.slice(0, 4);                                    // "2025"
+  if (view === 'quarterly') return `${mk.slice(0, 4)}-Q${Math.ceil(parseInt(mk.slice(5, 7), 10) / 3)}`; // "2025-Q3"
+  return mk.slice(0, 7);                                                               // "2025-07"
+}
+
 const EXCLUDED = `('Do Not Tag (COGS/Non-S&M)', 'Unclassified')`;
 
 // ─── Route ────────────────────────────────────────────────────────────────────
@@ -194,6 +205,33 @@ export async function GET(req: NextRequest) {
     ].sort();
 
     const nsMap    = new Map(nsRows.map((r) => [r.period_key, Number(r.spend)]));
+
+    // ── Department adjustments — apply to S&M spend per period ───────────────
+    // Fetch month-specific adjustments within the NS date range, convert each
+    // YYYY-MM month_key to the same period bucket the SQL uses, and add to nsMap
+    // so spendVals (built below) automatically reflects all adjustments.
+    {
+      const adjParams: unknown[] = [];
+      const adjConds: string[]   = ['month_key IS NOT NULL'];
+      if (nsFrom) { adjParams.push(nsFrom); adjConds.push(`month_key >= $${adjParams.length}`); }
+      if (nsTo)   { adjParams.push(nsTo);   adjConds.push(`month_key <= $${adjParams.length}`); }
+
+      const adjRows = await query<{ month_key: string; amount: string }>(
+        `SELECT month_key, SUM(amount) / 100.0 AS amount
+         FROM department_adjustments
+         WHERE ${adjConds.join(' AND ')}
+         GROUP BY month_key
+         HAVING SUM(amount) != 0`,
+        adjParams,
+      );
+
+      for (const adj of adjRows) {
+        const pk  = monthKeyToPeriodKey(adj.month_key, view);
+        const cur = nsMap.get(pk) ?? 0;
+        nsMap.set(pk, cur + Number(adj.amount));
+      }
+    }
+
     const allInMap = new Map(allInRows.map((r) => [r.period_key, Number(r.spend)]));
     const sfOppsMap = new Map(sfOppsRows.map((r) => [r.period_key, Number(r.opps)]));
     const sfWonMap  = new Map(sfWonRows.map((r) => [
