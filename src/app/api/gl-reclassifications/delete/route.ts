@@ -5,15 +5,22 @@ import { execute } from '@/db/query';
 export async function POST(req: NextRequest) {
   try {
     await initDb();
-    const body = await req.json() as { financial_row: string; month_key?: string | null };
+    const body = await req.json() as {
+      financial_row: string;
+      entity_name?:  string;
+      month_key?:    string | null;
+    };
     if (!body.financial_row) {
       return NextResponse.json({ error: 'financial_row is required' }, { status: 400 });
     }
-    const monthKey = body.month_key ?? null;
+    const monthKey   = body.month_key   ?? null;
+    const entityName = body.entity_name ?? '';
     await execute(
       `DELETE FROM gl_reclassifications
-       WHERE financial_row = $1 AND month_key IS NOT DISTINCT FROM $2`,
-      [body.financial_row, monthKey]
+       WHERE financial_row = $1
+         AND entity_name   = $2
+         AND month_key IS NOT DISTINCT FROM $3`,
+      [body.financial_row, entityName, monthKey]
     );
     return NextResponse.json({ ok: true });
   } catch (err) {

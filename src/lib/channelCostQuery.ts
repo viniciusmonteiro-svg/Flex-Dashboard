@@ -32,17 +32,21 @@ export const INTERCOMPANY_AMOUNT_EXPR =
   `CASE WHEN ia.id IS NOT NULL THEN n.amount * ia.marketing_pct / 100.0 ELSE n.amount END`;
 
 /**
- * Period-aware GL exclusion clause.
- * Excludes financial_rows that have a reclassification for:
- *   • any period  (month_key IS NULL), or
- *   • the specific period being queried  (month_key = ${periodExpr})
+ * Period- and entity-aware GL exclusion clause.
+ * Excludes netsuite_actuals rows that have a matching reclassification where:
+ *   • the period matches (month_key IS NULL = all periods, or month_key = current period)
+ *   • the entity matches:
+ *       entity_name = ''           → legacy all-entity entry, excludes every vendor
+ *       entity_name = n.entity_name → excludes only that specific vendor
  *
  * Add to WHERE (with AND).
  */
 export function buildGLExclusionClause(periodExpr: string): string {
-  return `n.financial_row NOT IN (
-    SELECT financial_row FROM gl_reclassifications
-    WHERE month_key IS NULL OR month_key = ${periodExpr}
+  return `NOT EXISTS (
+    SELECT 1 FROM gl_reclassifications gr
+    WHERE gr.financial_row = n.financial_row
+      AND (gr.entity_name = '' OR gr.entity_name = n.entity_name)
+      AND (gr.month_key IS NULL OR gr.month_key = ${periodExpr})
   )`;
 }
 

@@ -321,8 +321,15 @@ BEGIN
     ALTER TABLE gl_reclassifications DROP CONSTRAINT gl_reclassifications_financial_row_key;
   END IF;
 END $mig$;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_gl_reclass_row_null  ON gl_reclassifications (financial_row) WHERE month_key IS NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_gl_reclass_row_month ON gl_reclassifications (financial_row, month_key) WHERE month_key IS NOT NULL;
+-- Migration: add entity_name to gl_reclassifications for per-vendor reclassification.
+-- Default '' = legacy "all entities for this GL account" (backward-compatible).
+ALTER TABLE gl_reclassifications ADD COLUMN IF NOT EXISTS entity_name TEXT NOT NULL DEFAULT '';
+
+-- Drop old partial indexes (financial_row only) and recreate including entity_name.
+DROP INDEX IF EXISTS idx_gl_reclass_row_null;
+DROP INDEX IF EXISTS idx_gl_reclass_row_month;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_gl_reclass_entity_null  ON gl_reclassifications (financial_row, entity_name) WHERE month_key IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_gl_reclass_entity_month ON gl_reclassifications (financial_row, entity_name, month_key) WHERE month_key IS NOT NULL;
 
 -- ── Intercompany allocations ─────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS intercompany_allocations (
