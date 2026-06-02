@@ -1106,48 +1106,7 @@ export default function SalesforceClient() {
               )}
             </div>
 
-            {/* ── Card 3: Cohort Win Rate ───────────────────────────────── */}
-            <div
-              className="rounded-xl px-5 py-4 flex flex-col gap-1 shadow-sm"
-              style={{ background: '#ffffff', border: '1px solid #e2e8f0' }}
-            >
-              <div className="flex items-center gap-1.5">
-                <span
-                  className="text-xs font-bold uppercase tracking-wider"
-                  style={{ color: 'var(--color-neutral)' }}
-                >
-                  Cohort Win Rate
-                </span>
-                <span
-                  title="Closed Won ÷ Total Opportunities Created"
-                  style={{ fontSize: 12, color: '#cbd5e1', cursor: 'help', userSelect: 'none', lineHeight: 1 }}
-                  aria-label="Cohort Win Rate definition"
-                >
-                  ⓘ
-                </span>
-              </div>
-              <span
-                className="text-2xl font-bold tabular-nums"
-                style={{ color: loadingCohort ? '#cbd5e1' : '#22c55e' }}
-              >
-                {loadingCohort ? '—' : kpiCohortWinRate === null ? '—' : `${kpiCohortWinRate.toFixed(1)}%`}
-              </span>
-              <span className="text-xs" style={{ color: 'var(--color-neutral)' }}>
-                closed won ÷ created
-              </span>
-              {periodLabel && (
-                <span className="text-xs" style={{ color: '#94a3b8' }}>
-                  {periodLabel}
-                </span>
-              )}
-              {!loadingCohort && winRateTrend.length > 1 && (
-                <div className="mt-1">
-                  <SparkBar values={winRateTrend} color="#22c55e" />
-                </div>
-              )}
-            </div>
-
-            {/* ── Card 4: Won / Demoed ─────────────────────────────────── */}
+            {/* ── Card 3: Won / Demoed ─────────────────────────────────── */}
             <div
               className="rounded-xl px-5 py-4 flex flex-col gap-1 shadow-sm"
               style={{ background: '#ffffff', border: '1px solid #e2e8f0' }}
@@ -1184,6 +1143,47 @@ export default function SalesforceClient() {
               {!loadingCohort && wonDemoedTrend.length > 1 && (
                 <div className="mt-1">
                   <SparkBar values={wonDemoedTrend} color="#14b8a6" />
+                </div>
+              )}
+            </div>
+
+            {/* ── Card 4: Cohort Win Rate ───────────────────────────────── */}
+            <div
+              className="rounded-xl px-5 py-4 flex flex-col gap-1 shadow-sm"
+              style={{ background: '#ffffff', border: '1px solid #e2e8f0' }}
+            >
+              <div className="flex items-center gap-1.5">
+                <span
+                  className="text-xs font-bold uppercase tracking-wider"
+                  style={{ color: 'var(--color-neutral)' }}
+                >
+                  Cohort Win Rate
+                </span>
+                <span
+                  title="Closed Won ÷ Total Opportunities Created"
+                  style={{ fontSize: 12, color: '#cbd5e1', cursor: 'help', userSelect: 'none', lineHeight: 1 }}
+                  aria-label="Cohort Win Rate definition"
+                >
+                  ⓘ
+                </span>
+              </div>
+              <span
+                className="text-2xl font-bold tabular-nums"
+                style={{ color: loadingCohort ? '#cbd5e1' : '#22c55e' }}
+              >
+                {loadingCohort ? '—' : kpiCohortWinRate === null ? '—' : `${kpiCohortWinRate.toFixed(1)}%`}
+              </span>
+              <span className="text-xs" style={{ color: 'var(--color-neutral)' }}>
+                closed won ÷ created
+              </span>
+              {periodLabel && (
+                <span className="text-xs" style={{ color: '#94a3b8' }}>
+                  {periodLabel}
+                </span>
+              )}
+              {!loadingCohort && winRateTrend.length > 1 && (
+                <div className="mt-1">
+                  <SparkBar values={winRateTrend} color="#22c55e" />
                 </div>
               )}
             </div>
