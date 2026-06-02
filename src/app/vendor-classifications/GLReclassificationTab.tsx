@@ -1,43 +1,72 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { formatCurrency, formatMonthShort } from '@/lib/format';
 import { ToastContainer, type ToastItem } from '@/components/ui/Toast';
-import { formatMonthShort } from '@/lib/format';
+import { useUnsavedChanges } from '@/lib/UnsavedChangesContext';
 import type { VendorClassificationRow } from '@/app/api/vendor-classifications/route';
 
-const DEPARTMENTS = ['Sales', 'Technology', 'Development', 'Administration', 'Finance', 'Other'] as const;
+const DEPARTMENTS = [
+  '(Keep in Marketing)',
+  'Sales',
+  'Technology',
+  'Development',
+  'Administration',
+  'Finance',
+  'Other',
+] as const;
 
-interface ReclassRow {
-  financial_row: string;
-  month_key:     string | null;
-  from_channel:  string;
-  to_department: string;
-  description:   string | null;
-  total_spend:   number;
+type DeptOption = (typeof DEPARTMENTS)[number];
+
+interface GlDisplayRow extends VendorClassificationRow {
+  to_department: string;    // '' = keep in marketing
+  reclass_description: string | null;
 }
 
-interface DeptAlloc { department: string; total_allocated: number; gl_count: number; }
+interface GlPendingChange {
+  financial_row: string;
+  entity_name:   string;
+  old_dept:      string;
+  new_dept:      string;
+  month_key:     string | null;
+  from_channel:  string;
+}
+
+const rowKey = (r: { financial_row: string; entity_name: string }) =>
+  `${r.financial_row}||${r.entity_name}`;
 
 export default function GLReclassificationTab() {
-  const [rows, setRows]           = useState<ReclassRow[]>([]);
+  const [rows, setRows]           = useState<GlDisplayRow[]>([]);
   const [loading, setLoading]     = useState(true);
-  const [saving, setSaving]       = useState(false);
-  const [showForm, setShowForm]   = useState(false);
+  const [pendingChanges, setPendingChanges] = useState<Map<string, GlPendingChange>>(new Map());
+  const [isSaving, setIsSaving]   = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [toasts, setToasts]       = useState<ToastItem[]>([]);
 
   const [months, setMonths]               = useState<string[]>([]);
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
-  const [search, setSearch]               = useState('');
+  const [filterText, setFilterText]       = useState('');
+  const [filterDept, setFilterDept]       = useState<string>('all');
+  const [showReclassOnly, setShowReclassOnly] = useState(false);
 
-  // Form state
-  const [fRow, setFRow]     = useState('');
-  const [fMonth, setFMonth] = useState<string>('');  // '' = no specific month (all periods)
-  const [fCh, setFCh]       = useState('');
-  const [fDept, setFDept]   = useState<string>(DEPARTMENTS[0]);
-  const [fDesc, setFDesc]   = useState('');
+  const hasPending = pendingChanges.size > 0;
 
-  // VC rows for GL account dropdown
-  const [vcRows, setVcRows] = useState<VendorClassificationRow[]>([]);
+  // Register unsaved-changes guard
+  const { register, unregister } = useUnsavedChanges();
+  const pendingRef = useRef(pendingChanges);
+  pendingRef.current = pendingChanges;
+  useEffect(() => {
+    register(() => pendingRef.current.size > 0);
+    return () => unregister();
+  }, [register, unregister]);
+
+  // Browser close guard
+  useEffect(() => {
+    if (!hasPending) return;
+    const h = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener('beforeunload', h);
+    return () => window.removeEventListener('beforeunload', h);
+  }, [hasPending]);
 
   const addToast = useCallback((msg: string, type: ToastItem['type']) => {
     const id = crypto.randomUUID();
@@ -57,157 +86,183 @@ export default function GLReclassificationTab() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res  = await fetch('/api/gl-reclassifications');
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Load failed');
-      setRows(data.reclassifications);
+      const params = new URLSearchParams({ period_type: 'accounting' });
+      if (selectedMonth !== 'all') params.set('month_key', selectedMonth);
+      const [vcRes, glRes] = await Promise.all([
+        fetch(`/api/vendor-classifications?${params}`),
+        fetch('/api/gl-reclassifications'),
+      ]);
+      const vcData = await vcRes.json();
+      const glData = await glRes.json();
+
+      // Build lookup: (financial_row||entity_name||month_key) → reclass row
+      type RRow = { financial_row: string; entity_name: string; month_key: string | null; to_department: string; description: string | null };
+      const glMap = new Map<string, RRow>();
+      for (const r of (glData.reclassifications as RRow[])) {
+        if (!r.entity_name) continue; // skip legacy all-entity entries (entity_name='')
+        const mk = r.month_key ?? 'null';
+        glMap.set(`${r.financial_row}||${r.entity_name}||${mk}`, r);
+      }
+
+      const getReclass = (financial_row: string, entity_name: string): RRow | null => {
+        if (selectedMonth !== 'all') {
+          const specific = glMap.get(`${financial_row}||${entity_name}||${selectedMonth}`);
+          if (specific) return specific;
+        }
+        return glMap.get(`${financial_row}||${entity_name}||null`) ?? null;
+      };
+
+      const merged: GlDisplayRow[] = (vcData.rows as VendorClassificationRow[]).map((vc) => {
+        const reclass = getReclass(vc.financial_row, vc.entity_name);
+        return {
+          ...vc,
+          to_department:       reclass?.to_department    ?? '',
+          reclass_description: reclass?.description      ?? null,
+        };
+      }).sort((a, b) => b.total_amount - a.total_amount);
+
+      setRows(merged);
     } catch {
-      addToast('Failed to load reclassifications', 'error');
+      addToast('Failed to load data', 'error');
     } finally {
       setLoading(false);
     }
-  }, [addToast]);
+  }, [selectedMonth, addToast]);
 
-  useEffect(() => {
-    load();
-    fetch('/api/vendor-classifications')
-      .then((r) => r.json())
-      .then((d) => { if (d.rows) setVcRows(d.rows); })
-      .catch(() => {});
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
-  // Distinct financial rows for the dropdown, filtered by search
-  const financialRows = useMemo(() => {
-    const seen = new Map<string, { channel: string; entity_names: string[] }>();
-    for (const r of vcRows) {
-      if (!r.financial_row) continue;
-      if (!seen.has(r.financial_row)) {
-        seen.set(r.financial_row, { channel: r.channel, entity_names: [r.entity_name] });
+  const handleDeptChange = useCallback((row: GlDisplayRow, newDept: string) => {
+    const key = rowKey(row);
+    setPendingChanges((prev) => {
+      const next = new Map(prev);
+      const existing = prev.get(key);
+      const oldDept  = existing ? existing.old_dept : row.to_department;
+      if (newDept === oldDept) {
+        next.delete(key);
       } else {
-        const ex = seen.get(r.financial_row)!;
-        if (!ex.entity_names.includes(r.entity_name)) ex.entity_names.push(r.entity_name);
+        next.set(key, {
+          financial_row: row.financial_row,
+          entity_name:   row.entity_name,
+          old_dept:      oldDept,
+          new_dept:      newDept,
+          month_key:     selectedMonth !== 'all' ? selectedMonth : null,
+          from_channel:  row.channel,
+        });
       }
-    }
-    return [...seen.entries()]
-      .map(([fr, meta]) => ({ financial_row: fr, ...meta }))
-      .sort((a, b) => a.financial_row.localeCompare(b.financial_row));
-  }, [vcRows]);
-
-  const filteredDropdownRows = useMemo(() => {
-    const q = search.toLowerCase();
-    if (!q) return financialRows;
-    return financialRows.filter(
-      (r) =>
-        r.financial_row.toLowerCase().includes(q) ||
-        r.entity_names.some((n) => n.toLowerCase().includes(q))
+      return next;
+    });
+    setRows((prev) =>
+      prev.map((r) => rowKey(r) === key ? { ...r, to_department: newDept } : r)
     );
-  }, [financialRows, search]);
+  }, [selectedMonth]);
 
-  // Filter displayed rows by selected month + search
-  const displayRows = useMemo(() => {
-    let out = rows;
-    if (selectedMonth !== 'all') {
-      out = out.filter((r) => r.month_key === selectedMonth);
-    }
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      out = out.filter(
-        (r) =>
-          r.financial_row.toLowerCase().includes(q) ||
-          r.from_channel.toLowerCase().includes(q) ||
-          r.to_department.toLowerCase().includes(q) ||
-          (r.description ?? '').toLowerCase().includes(q)
-      );
-    }
-    return out;
-  }, [rows, selectedMonth, search]);
-
-  const handleRowSelect = (fr: string) => {
-    setFRow(fr);
-    const match = financialRows.find((r) => r.financial_row === fr);
-    setFCh(match?.channel ?? '');
-  };
-
-  const handleSave = async () => {
-    if (!fRow || !fDept) { addToast('GL Account and Reclassified To are required', 'error'); return; }
-    setSaving(true);
+  const handleSave = useCallback(async () => {
+    if (!pendingChanges.size) return;
+    setIsSaving(true);
     try {
-      const res = await fetch('/api/gl-reclassifications/upsert', {
+      const changes = Array.from(pendingChanges.values()).map((c) => ({
+        financial_row: c.financial_row,
+        entity_name:   c.entity_name,
+        month_key:     c.month_key,
+        to_department: c.new_dept === '(Keep in Marketing)' ? '' : c.new_dept,
+        from_channel:  c.from_channel,
+        description:   null,
+      }));
+      const res = await fetch('/api/gl-reclassifications/batch-upsert', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          financial_row: fRow,
-          month_key:     fMonth || null,
-          from_channel:  fCh,
-          to_department: fDept,
-          description:   fDesc,
-        }),
+        body: JSON.stringify({ changes }),
       });
-      if (!res.ok) throw new Error('Save failed');
-      addToast('Reclassification saved', 'success');
-      setShowForm(false);
-      setFRow(''); setFMonth(''); setFCh(''); setFDept(DEPARTMENTS[0]); setFDesc('');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Save failed');
+      setPendingChanges(new Map());
+      setPreviewOpen(false);
+      addToast(`✓ ${data.saved} reclassification${data.saved !== 1 ? 's' : ''} updated`, 'success');
       await load();
     } catch {
       addToast('Save failed — please retry', 'error');
     } finally {
-      setSaving(false);
+      setIsSaving(false);
     }
-  };
+  }, [pendingChanges, load, addToast]);
 
-  const handleDelete = async (r: ReclassRow) => {
-    const label = r.month_key
-      ? `${r.financial_row} (${formatMonthShort(r.month_key)})`
-      : r.financial_row;
-    if (!window.confirm(`Remove the reclassification for "${label}"?`)) return;
-    try {
-      const res = await fetch('/api/gl-reclassifications/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ financial_row: r.financial_row, month_key: r.month_key }),
-      });
-      if (!res.ok) throw new Error('Delete failed');
-      addToast('Reclassification removed', 'success');
-      await load();
-    } catch {
-      addToast('Delete failed — please retry', 'error');
+  const handleDiscard = useCallback(() => {
+    setRows((prev) =>
+      prev.map((r) => {
+        const p = pendingChanges.get(rowKey(r));
+        return p ? { ...r, to_department: p.old_dept } : r;
+      })
+    );
+    setPendingChanges(new Map());
+    addToast('Changes discarded', 'info');
+  }, [pendingChanges, addToast]);
+
+  const summary = useMemo(() => {
+    const total        = rows.length;
+    const reclassified = rows.filter((r) => r.to_department !== '').length;
+    const pct          = total > 0 ? Math.round((reclassified / total) * 100) : 0;
+    return { total, reclassified, notReclassified: total - reclassified, pct };
+  }, [rows]);
+
+  const filtered = useMemo(() => {
+    let out = rows;
+    if (filterText.trim()) {
+      const q = filterText.toLowerCase();
+      out = out.filter(
+        (r) =>
+          r.financial_row.toLowerCase().includes(q) ||
+          r.entity_name.toLowerCase().includes(q)
+      );
     }
-  };
+    if (filterDept !== 'all') {
+      if (filterDept === 'none') out = out.filter((r) => !r.to_department);
+      else                        out = out.filter((r) => r.to_department === filterDept);
+    }
+    if (showReclassOnly) {
+      out = out.filter((r) => r.to_department !== '' || pendingChanges.has(rowKey(r)));
+    }
+    return out;
+  }, [rows, filterText, filterDept, showReclassOnly, pendingChanges]);
 
-  const deptSummary: DeptAlloc[] = useMemo(() =>
-    DEPARTMENTS.reduce<DeptAlloc[]>((acc, dept) => {
-      const dr = displayRows.filter((r) => r.to_department === dept);
-      if (!dr.length) return acc;
-      acc.push({
-        department:      dept,
-        total_allocated: dr.reduce((s, r) => s + r.total_spend, 0),
-        gl_count:        dr.length,
-      });
-      return acc;
-    }, []),
-  [displayRows]);
+  const pendingArray = useMemo(() => Array.from(pendingChanges.values()), [pendingChanges]);
 
-  const fmt = (d: number) =>
-    d.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+  const labelDept = (dept: string) => dept === '' ? '(Keep in Marketing)' : dept;
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-6 space-y-8">
+    <div className="mx-auto max-w-7xl px-6 py-6 space-y-6">
 
       {/* ── Header ── */}
-      <div>
-        <h2 className="text-xl font-semibold text-gray-900">G&L Reclassification</h2>
-        <p className="mt-1 text-sm text-gray-500">
-          Reclassify GL accounts away from marketing. Reclassified amounts are excluded from all channel cost totals.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900">G&L Reclassification</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Reclassify GL accounts away from marketing spend. Reclassified amounts are excluded from all channel cost calculations.
+          </p>
+        </div>
       </div>
 
-      {/* ── Filters ── */}
+      {/* ── Summary ── */}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        {([
+          ['Total Vendors', summary.total, false],
+          ['Reclassified', summary.reclassified, false],
+          ['Not Reclassified', summary.notReclassified, false],
+          ['Coverage', `${summary.pct}%`, false],
+        ] as [string, string|number, boolean][]).map(([label, value]) => (
+          <div key={label} className="rounded-lg border border-gray-200 bg-white px-4 py-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums text-gray-900">{value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Filter bar ── */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-gray-600 whitespace-nowrap">Viewing period:</span>
+          <span className="text-sm font-medium text-gray-600 whitespace-nowrap">Period:</span>
           <select
             value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
+            onChange={(e) => { setSelectedMonth(e.target.value); setPendingChanges(new Map()); }}
             className="rounded-md border border-[var(--color-neutral)] px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
           >
             <option value="all">All Months</option>
@@ -219,198 +274,240 @@ export default function GLReclassificationTab() {
         <div className="h-5 w-px bg-gray-200" />
         <input
           type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by GL account or vendor name…"
-          className="rounded-md border border-[var(--color-neutral)] px-3 py-1.5 text-sm w-72 focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+          value={filterText}
+          onChange={(e) => setFilterText(e.target.value)}
+          placeholder="Search vendor or GL row…"
+          className="rounded-md border border-[var(--color-neutral)] px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] w-56"
         />
+        <select
+          value={filterDept}
+          onChange={(e) => setFilterDept(e.target.value)}
+          className="rounded-md border border-[var(--color-neutral)] px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+        >
+          <option value="all">All Departments</option>
+          <option value="none">Not Reclassified</option>
+          {DEPARTMENTS.slice(1).map((d) => <option key={d} value={d}>{d}</option>)}
+        </select>
+        <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={showReclassOnly}
+            onChange={(e) => setShowReclassOnly(e.target.checked)}
+            className="rounded"
+          />
+          Show reclassified only
+        </label>
+        <span className="ml-auto text-sm text-gray-500">
+          {filtered.length} of {rows.length} vendors
+        </span>
       </div>
 
-      {/* ── Section 1: Reclassified GL Accounts ── */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-medium text-gray-800">Reclassified GL Accounts</h3>
-          <button
-            onClick={() => setShowForm((v) => !v)}
-            className="rounded-md bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-          >
-            {showForm ? 'Cancel' : 'Add Reclassification'}
-          </button>
-        </div>
-
-        {showForm && (
-          <div className="rounded-lg border border-gray-200 bg-gray-50 p-5 space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">GL Account</label>
-                <select
-                  value={fRow}
-                  onChange={(e) => handleRowSelect(e.target.value)}
-                  className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
-                  size={1}
-                >
-                  <option value="">Select GL account…</option>
-                  {filteredDropdownRows.map((r) => (
-                    <option key={r.financial_row} value={r.financial_row}>
-                      {r.financial_row}
-                      {r.entity_names.length > 0 ? ` — ${r.entity_names.slice(0, 2).join(', ')}` : ''}
-                    </option>
+      {/* ── Table ── */}
+      <div className="overflow-x-auto rounded-lg border border-gray-200">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+            <tr>
+              <th className="px-4 py-3">Vendor / Entity</th>
+              <th className="px-4 py-3">Total Spend</th>
+              <th className="px-4 py-3">Months</th>
+              <th className="px-4 py-3">Reclassify To</th>
+              <th className="px-4 py-3">Source</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {loading ? (
+              Array.from({ length: 8 }).map((_, i) => (
+                <tr key={i}>
+                  {[0, 1, 2, 3, 4].map((j) => (
+                    <td key={j} className="px-4 py-3">
+                      <div className="h-4 w-full animate-pulse rounded bg-gray-200" />
+                    </td>
                   ))}
-                </select>
-                {search && (
-                  <p className="mt-0.5 text-[11px] text-gray-400">
-                    {filteredDropdownRows.length} of {financialRows.length} GL accounts match "{search}"
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Original Channel (auto-filled)</label>
-                <input
-                  type="text"
-                  value={fCh}
-                  readOnly
-                  placeholder="Select a GL account first"
-                  className="w-full rounded border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-500 cursor-not-allowed"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Reclassified To</label>
-                <select
-                  value={fDept}
-                  onChange={(e) => setFDept(e.target.value)}
-                  className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
-                >
-                  {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Apply to Month (optional)</label>
-                <select
-                  value={fMonth}
-                  onChange={(e) => setFMonth(e.target.value)}
-                  className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
-                >
-                  <option value="">All periods</option>
-                  {months.map((m) => (
-                    <option key={m} value={m}>{formatMonthShort(m)}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-span-2">
-                <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
-                <input
-                  type="text"
-                  value={fDesc}
-                  onChange={(e) => setFDesc(e.target.value)}
-                  placeholder="Optional note"
-                  className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
-                />
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={handleSave}
-                disabled={saving || !fRow}
-                className="rounded bg-[var(--color-primary)] px-4 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
-              >
-                {saving ? 'Saving…' : 'Save'}
-              </button>
-              <button
-                onClick={() => setShowForm(false)}
-                className="rounded border border-gray-300 px-4 py-1.5 text-sm font-medium text-gray-700 hover:bg-white"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div className="overflow-x-auto rounded-lg border border-gray-200">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-              <tr>
-                <th className="px-4 py-3">Financial Row</th>
-                <th className="px-4 py-3">Month</th>
-                <th className="px-4 py-3">Original Channel</th>
-                <th className="px-4 py-3">Reclassified To</th>
-                <th className="px-4 py-3">Total Spend</th>
-                <th className="px-4 py-3">Description</th>
-                <th className="px-4 py-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {loading ? (
-                Array.from({ length: 3 }).map((_, i) => (
-                  <tr key={i}>
-                    {[0, 1, 2, 3, 4, 5, 6].map((j) => (
-                      <td key={j} className="px-4 py-3">
-                        <div className="h-4 w-full animate-pulse rounded bg-gray-200" />
-                      </td>
-                    ))}
-                  </tr>
-                ))
-              ) : displayRows.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
-                    {search ? `No reclassifications match "${search}"` : 'No reclassifications defined'}
-                  </td>
                 </tr>
-              ) : (
-                displayRows.map((r) => (
-                  <tr key={`${r.financial_row}||${r.month_key}`} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-mono text-xs text-gray-900">{r.financial_row}</td>
-                    <td className="px-4 py-3 text-xs text-gray-500">
-                      {r.month_key ? formatMonthShort(r.month_key) : 'All'}
+              ))
+            ) : filtered.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-4 py-8 text-center text-gray-400">
+                  No vendors found
+                </td>
+              </tr>
+            ) : (
+              filtered.map((row) => {
+                const key       = rowKey(row);
+                const isPending = pendingChanges.has(key);
+
+                return (
+                  <tr
+                    key={key}
+                    className={
+                      isPending
+                        ? 'border-l-[3px] border-l-[var(--color-pending)] bg-[var(--color-pending-bg)]'
+                        : 'hover:bg-gray-50'
+                    }
+                  >
+                    {/* Vendor / Entity */}
+                    <td className="px-4 py-2.5">
+                      {!row.has_name ? (
+                        <div>
+                          <span className="text-xs text-gray-900">-Unassigned-</span>
+                          {row.financial_row && (
+                            <div className="mt-0.5 font-mono text-[11px] text-gray-400 truncate max-w-xs">
+                              {row.financial_row}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div>
+                          <span className="font-mono text-xs text-gray-900">{row.entity_name}</span>
+                          {row.financial_row && (
+                            <div className="mt-0.5 font-mono text-[11px] text-gray-400 truncate max-w-xs">
+                              {row.financial_row}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </td>
-                    <td className="px-4 py-3 text-gray-700">{r.from_channel || '—'}</td>
-                    <td className="px-4 py-3">
-                      <span className="inline-block rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
-                        {r.to_department}
-                      </span>
+
+                    {/* Total Spend */}
+                    <td className="px-4 py-2.5 tabular-nums text-gray-700">
+                      {formatCurrency(row.total_amount * 100)}
                     </td>
-                    <td className="px-4 py-3 tabular-nums text-gray-700">{fmt(r.total_spend)}</td>
-                    <td className="px-4 py-3 text-gray-500">{r.description ?? '—'}</td>
-                    <td className="px-4 py-3">
-                      <button
-                        onClick={() => handleDelete(r)}
-                        className="text-xs font-medium text-red-600 hover:underline"
-                      >
-                        Remove
-                      </button>
+
+                    {/* Months Active */}
+                    <td className="px-4 py-2.5 tabular-nums text-gray-500">
+                      {row.months_active}
+                    </td>
+
+                    {/* Reclassify To dropdown */}
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={row.to_department === '' ? '(Keep in Marketing)' : row.to_department}
+                          disabled={isSaving}
+                          onChange={(e) => handleDeptChange(row, e.target.value === '(Keep in Marketing)' ? '' : e.target.value)}
+                          className={[
+                            'rounded border px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] disabled:opacity-50',
+                            row.to_department !== ''
+                              ? 'border-amber-300 bg-amber-50 text-amber-800'
+                              : 'border-[var(--color-neutral)] bg-white',
+                          ].join(' ')}
+                        >
+                          {DEPARTMENTS.map((d) => (
+                            <option key={d} value={d}>{d}</option>
+                          ))}
+                        </select>
+                        {isPending && (
+                          <span className="inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                            unsaved
+                          </span>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Source */}
+                    <td className="px-4 py-2.5">
+                      {row.manually_set ? (
+                        <span className="inline-block rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">Manual</span>
+                      ) : row.is_preset ? (
+                        <span className="inline-block rounded border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">Preset</span>
+                      ) : (
+                        <span className="inline-block rounded border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-400">—</span>
+                      )}
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ── Sticky save bar ── */}
+      <div
+        className={`fixed bottom-0 left-0 right-0 z-40 border-t border-gray-200 bg-white px-6 py-3 shadow-[0_-2px_8px_rgba(0,0,0,0.06)] transition-transform duration-300 ${
+          hasPending ? 'translate-y-0' : 'translate-y-full'
+        }`}
+      >
+        <div className="mx-auto flex max-w-7xl items-center justify-between">
+          <span className="text-sm font-medium text-gray-700">
+            {pendingChanges.size} unsaved change{pendingChanges.size !== 1 ? 's' : ''}
+          </span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setPreviewOpen(true)}
+              className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Preview Changes
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={isSaving}
+              className="rounded-md bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+            >
+              {isSaving ? 'Saving…' : 'Save All Changes'}
+            </button>
+            <button
+              onClick={handleDiscard}
+              disabled={isSaving}
+              className="text-sm text-gray-500 underline hover:text-gray-700 disabled:opacity-50"
+            >
+              Discard
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* ── Section 2: Department Allocation View ── */}
-      {deptSummary.length > 0 && (
-        <div className="space-y-4">
-          <h3 className="text-base font-medium text-gray-800">Department Allocation View</h3>
-          <div className="overflow-x-auto rounded-lg border border-gray-200">
+      {/* ── Preview modal ── */}
+      {previewOpen && (
+        <dialog
+          open
+          className="fixed inset-0 z-50 m-auto w-full max-w-2xl rounded-lg border border-gray-200 bg-white p-0 shadow-xl backdrop:bg-black/40"
+        >
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900">Preview Changes</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              {pendingArray.length} reclassification{pendingArray.length !== 1 ? 's' : ''} to save
+            </p>
+          </div>
+          <div className="max-h-[60vh] overflow-y-auto px-6 py-4">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <thead className="text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 <tr>
-                  <th className="px-4 py-3">Department</th>
-                  <th className="px-4 py-3">Total Allocated ($)</th>
-                  <th className="px-4 py-3">GL Accounts</th>
+                  <th className="pb-2 pr-3">Vendor</th>
+                  <th className="pb-2 pr-3">GL Account</th>
+                  <th className="pb-2 pr-3">Current</th>
+                  <th className="pb-2 px-1"></th>
+                  <th className="pb-2">New</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {deptSummary.map((d) => (
-                  <tr key={d.department} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium text-gray-900">{d.department}</td>
-                    <td className="px-4 py-3 tabular-nums text-gray-700">{fmt(d.total_allocated)}</td>
-                    <td className="px-4 py-3 text-gray-500">{d.gl_count}</td>
+                {pendingArray.map((c) => (
+                  <tr key={`${c.financial_row}||${c.entity_name}`}>
+                    <td className="py-2 pr-3 font-mono text-xs">{c.entity_name}</td>
+                    <td className="py-2 pr-3 font-mono text-[11px] text-gray-500 max-w-[130px] truncate">{c.financial_row}</td>
+                    <td className="py-2 pr-3 text-gray-500">{labelDept(c.old_dept)}</td>
+                    <td className="py-2 px-1 text-gray-400">→</td>
+                    <td className="py-2 font-medium text-gray-900">{labelDept(c.new_dept)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
+          <div className="flex items-center justify-end gap-3 border-t border-gray-200 px-6 py-4">
+            <button
+              onClick={() => setPreviewOpen(false)}
+              className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              className="rounded-md bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+            >
+              Confirm &amp; Save
+            </button>
+          </div>
+        </dialog>
       )}
 
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
