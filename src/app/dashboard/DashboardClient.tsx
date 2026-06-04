@@ -2469,359 +2469,315 @@ export default function DashboardClient() {
         )}
       </div>
 
-      {/* ── Chart 2: Closed Won Deals & ARR:CAC Ratio ────────────────────── */}
-      <div
-        id="chart-arr-cac"
-        className="chart-card rounded-xl shadow-sm group"
-        style={{
-          background: '#ffffff',
-          border: '1px solid #e2e8f0',
-          padding: 24,
-          marginTop: 20,
-          marginBottom: 20,
-        }}
-      >
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
-          <div>
-            <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--color-primary)', marginBottom: 2 }}>
-              Closed Won Deals &amp; ARR:CAC Ratio
-            </h2>
-            <p style={{ fontSize: 12, color: 'var(--color-neutral)' }}>
-              Bar = Total Closed Won deals | Line = ARR ÷ All-in S&amp;M Spend
-            </p>
-          </div>
+      {/* ── Charts 2 & 3: Side by Side ──────────────────────────────────── */}
+      <div style={{ display: 'flex', gap: 20, marginTop: 20, marginBottom: 20 }}>
+        {/* ── Chart 2: Closed Won Deals & ARR:CAC Ratio ────────────────────── */}
+        <div
+          id="chart-arr-cac"
+          className="chart-card rounded-xl shadow-sm group"
+          style={{
+            flex: 1,
+            background: '#ffffff',
+            border: '1px solid #e2e8f0',
+            padding: 20,
+          }}
+        >
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 12 }}>
+            <div>
+              <h2 style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--color-primary)', marginBottom: 2 }}>
+                Closed Won Deals &amp; ARR:CAC Ratio
+              </h2>
+              <p style={{ fontSize: 11, color: 'var(--color-neutral)' }}>
+                Bar = Closed Won | Line = ARR ÷ Spend
+              </p>
+            </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <ChartExportButton
-              elementId="chart-arr-cac"
-              title="Closed Won Deals & ARR:CAC Ratio"
-              onAddToast={addToast}
-            />
-            <ToggleGroup<View>
-              options={[
-                { label: 'Monthly',   value: 'monthly'   },
-                { label: 'Quarterly', value: 'quarterly' },
-                { label: 'Yearly',    value: 'yearly'    },
-              ]}
-              value={arrCacView}
-              onChange={handleArrCacViewChange}
-            />
-
-            <div style={{ width: 1, height: 22, background: '#e2e8f0', flexShrink: 0 }} />
-
-            {arrCacView === 'quarterly' ? (() => {
-              const quarters = monthsToQuarterKeys(months);
-              const fromQ = arrCacFrom ? monthToQuarterKey(arrCacFrom) : '';
-              const toQ   = arrCacTo   ? monthToQuarterKey(arrCacTo)   : '';
-              return (
-                <>
-                  <Select value={fromQ} onChange={(q) => setArrCacFrom(quarterKeyToFrom(q))}>
-                    {quarters.filter((q) => !toQ || q <= toQ).map((q) => (
-                      <option key={q} value={q}>{quarterKeyToLabel(q)}</option>
-                    ))}
-                  </Select>
-                  <span style={{ fontSize: 12, color: 'var(--color-neutral)' }}>to</span>
-                  <Select value={toQ} onChange={(q) => setArrCacTo(quarterKeyToTo(q))}>
-                    {quarters.filter((q) => !fromQ || q >= fromQ).map((q) => (
-                      <option key={q} value={q}>{quarterKeyToLabel(q)}</option>
-                    ))}
-                  </Select>
-                </>
-              );
-            })() : arrCacView === 'yearly' ? (() => {
-              const years  = monthsToYears(months);
-              const fromY  = arrCacFrom ? arrCacFrom.slice(0, 4) : '';
-              const toY    = arrCacTo   ? arrCacTo.slice(0, 4)   : '';
-              return (
-                <>
-                  <Select value={fromY} onChange={(y) => setArrCacFrom(`${y}-01`)}>
-                    {years.filter((y) => !toY || y <= toY).map((y) => (
-                      <option key={y} value={y}>{y}</option>
-                    ))}
-                  </Select>
-                  <span style={{ fontSize: 12, color: 'var(--color-neutral)' }}>to</span>
-                  <Select value={toY} onChange={(y) => setArrCacTo(`${y}-12`)}>
-                    {years.filter((y) => !fromY || y >= fromY).map((y) => (
-                      <option key={y} value={y}>{y}</option>
-                    ))}
-                  </Select>
-                </>
-              );
-            })() : (
-              <>
-                <Select value={arrCacFrom} onChange={(m) => setArrCacFrom(m)}>
-                  {months.filter((m) => !arrCacTo || m <= arrCacTo).map((m) => (
-                    <option key={m} value={m}>{formatMonthShort(m)}</option>
-                  ))}
-                </Select>
-                <span style={{ fontSize: 12, color: 'var(--color-neutral)' }}>to</span>
-                <Select value={arrCacTo} onChange={(m) => setArrCacTo(m)}>
-                  {months.filter((m) => !arrCacFrom || m >= arrCacFrom).map((m) => (
-                    <option key={m} value={m}>{formatMonthShort(m)}</option>
-                  ))}
-                </Select>
-              </>
-            )}
-          </div>
-        </div>
-
-        {loadingArrCac ? (
-          <div className="animate-pulse" style={{ height: 320, borderRadius: 8, background: '#f1f5f9' }} />
-        ) : arrCacData.length === 0 ? (
-          <div style={{ height: 320, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 14 }}>
-            No data for selected period
-          </div>
-        ) : (
-          <ResponsiveContainer width="100%" height={320}>
-            <ComposedChart data={arrCacData} margin={{ top: 20, right: 60, bottom: 60, left: 60 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis
-                dataKey="period"
-                tick={{ fontSize: 12 }}
-                angle={-35}
-                textAnchor="end"
-                height={70}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <ChartExportButton
+                elementId="chart-arr-cac"
+                title="Closed Won Deals & ARR:CAC Ratio"
+                onAddToast={addToast}
               />
-              <YAxis
-                yAxisId="left"
-                orientation="left"
-                tickFormatter={(v) => v.toLocaleString()}
-                label={{ value: 'Closed Won (count)', angle: -90, position: 'insideLeft', offset: -10, style: { fontSize: 12, fill: '#64748b' } }}
+              <ToggleGroup<View>
+                options={[
+                  { label: 'M',   value: 'monthly'   },
+                  { label: 'Q',   value: 'quarterly' },
+                  { label: 'Y',   value: 'yearly'    },
+                ]}
+                value={arrCacView}
+                onChange={handleArrCacViewChange}
               />
-              <YAxis
-                yAxisId="right"
-                orientation="right"
-                tickFormatter={(v: number) => `${v.toFixed(2)}x`}
-                label={{ value: 'ARR : CAC ratio', angle: 90, position: 'insideRight', offset: 10, style: { fontSize: 12, fill: '#64748b' } }}
-              />
-              <Tooltip
-                formatter={(value: number, name: string) => {
-                  if (name === 'Closed Won') return [value.toLocaleString(), 'Closed Won Deals'];
-                  if (name === 'ARR:CAC')    return [`${Number(value).toFixed(2)}x`, 'ARR Sub Only : CAC'];
-                  return [value, name];
-                }}
-                labelFormatter={(label) => `Period: ${label}`}
-                content={({ active, payload, label }) => {
-                  if (!active || !payload || payload.length === 0) return null;
-                  const row = payload[0]?.payload as ArrCacRow | undefined;
-                  return (
-                    <div style={{
-                      background: '#fff',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: 8,
-                      padding: '10px 14px',
-                      fontSize: 12,
-                      color: 'var(--color-primary)',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                    }}>
-                      <div style={{ fontWeight: 700, marginBottom: 6 }}>Period: {label}</div>
-                      {payload.map((entry) => (
-                        <div key={entry.name} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 2 }}>
-                          <span style={{ color: entry.color as string }}>{entry.name === 'ARR:CAC' ? 'ARR Sub Only : CAC' : 'Closed Won Deals'}</span>
-                          <span style={{ fontWeight: 600 }}>
-                            {entry.name === 'ARR:CAC'
-                              ? `${Number(entry.value).toFixed(2)}x`
-                              : Number(entry.value).toLocaleString()}
-                          </span>
-                        </div>
+
+              <div style={{ width: 1, height: 22, background: '#e2e8f0', flexShrink: 0 }} />
+
+              {arrCacView === 'quarterly' ? (() => {
+                const quarters = monthsToQuarterKeys(months);
+                const fromQ = arrCacFrom ? monthToQuarterKey(arrCacFrom) : '';
+                const toQ   = arrCacTo   ? monthToQuarterKey(arrCacTo)   : '';
+                return (
+                  <>
+                    <Select value={fromQ} onChange={(q) => setArrCacFrom(quarterKeyToFrom(q))}>
+                      {quarters.filter((q) => !toQ || q <= toQ).map((q) => (
+                        <option key={q} value={q}>{quarterKeyToLabel(q)}</option>
                       ))}
-                      {row && (
-                        <>
-                          <div style={{ marginTop: 6, borderTop: '1px solid #f1f5f9', paddingTop: 6, color: 'var(--color-neutral)' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 2 }}>
-                              <span>ARR</span>
-                              <span>{formatCurrency(row.arr * 100)}</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
-                              <span>All-in Spend</span>
-                              <span>{formatCurrency(row.all_in_spend * 100)}</span>
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  );
-                }}
-              />
-              <Legend verticalAlign="top" height={36} />
-              <Bar
-                yAxisId="left"
-                dataKey="won"
-                name="Closed Won"
-                fill="#22c55e"
-                radius={[4, 4, 0, 0]}
-                maxBarSize={60}
-              />
-              <Line
-                yAxisId="right"
-                type="monotone"
-                dataKey="arr_cac_ratio"
-                name="ARR:CAC"
-                stroke="#a855f7"
-                strokeWidth={2}
-                dot={{ fill: '#a855f7', r: 5 }}
-                connectNulls={false}
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
-        )}
-      </div>
-
-      {/* ── Chart 3: $ / Opp Trend ───────────────────────────────────────── */}
-      <div
-        id="chart-opp-trend"
-        className="chart-card rounded-xl shadow-sm group"
-        style={{
-          background: '#ffffff',
-          border: '1px solid #e2e8f0',
-          padding: 24,
-          marginTop: 20,
-          marginBottom: 20,
-        }}
-      >
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
-          <div>
-            <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--color-primary)', marginBottom: 2 }}>
-              $ / Opp Trend
-            </h2>
-            <p style={{ fontSize: 12, color: 'var(--color-neutral)' }}>
-              LHS Bars = Opportunities | RHS Line = $/Opp
-            </p>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <ChartExportButton
-              elementId="chart-opp-trend"
-              title="$ / Opp Trend"
-              onAddToast={addToast}
-            />
-            <ToggleGroup<View>
-              options={[
-                { label: 'Monthly',   value: 'monthly'   },
-                { label: 'Quarterly', value: 'quarterly' },
-                { label: 'Yearly',    value: 'yearly'    },
-              ]}
-              value={oppTrendView}
-              onChange={handleOppTrendViewChange}
-            />
-
-            <div style={{ width: 1, height: 22, background: '#e2e8f0', flexShrink: 0 }} />
-
-            {oppTrendView === 'quarterly' ? (() => {
-              const quarters = monthsToQuarterKeys(months);
-              const fromQ = oppTrendFrom ? monthToQuarterKey(oppTrendFrom) : '';
-              const toQ   = oppTrendTo   ? monthToQuarterKey(oppTrendTo)   : '';
-              return (
+                    </Select>
+                    <span style={{ fontSize: 12, color: 'var(--color-neutral)' }}>to</span>
+                    <Select value={toQ} onChange={(q) => setArrCacTo(quarterKeyToTo(q))}>
+                      {quarters.filter((q) => !fromQ || q >= fromQ).map((q) => (
+                        <option key={q} value={q}>{quarterKeyToLabel(q)}</option>
+                      ))}
+                    </Select>
+                  </>
+                );
+              })() : arrCacView === 'yearly' ? (() => {
+                const years  = monthsToYears(months);
+                const fromY  = arrCacFrom ? arrCacFrom.slice(0, 4) : '';
+                const toY    = arrCacTo   ? arrCacTo.slice(0, 4)   : '';
+                return (
+                  <>
+                    <Select value={fromY} onChange={(y) => setArrCacFrom(`${y}-01`)}>
+                      {years.filter((y) => !toY || y <= toY).map((y) => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                    </Select>
+                    <span style={{ fontSize: 12, color: 'var(--color-neutral)' }}>to</span>
+                    <Select value={toY} onChange={(y) => setArrCacTo(`${y}-12`)}>
+                      {years.filter((y) => !fromY || y >= fromY).map((y) => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                    </Select>
+                  </>
+                );
+              })() : (
                 <>
-                  <Select value={fromQ} onChange={(q) => setOppTrendFrom(quarterKeyToFrom(q))}>
-                    {quarters.filter((q) => !toQ || q <= toQ).map((q) => (
-                      <option key={q} value={q}>{quarterKeyToLabel(q)}</option>
+                  <Select value={arrCacFrom} onChange={(m) => setArrCacFrom(m)}>
+                    {months.filter((m) => !arrCacTo || m <= arrCacTo).map((m) => (
+                      <option key={m} value={m}>{formatMonthShort(m)}</option>
                     ))}
                   </Select>
                   <span style={{ fontSize: 12, color: 'var(--color-neutral)' }}>to</span>
-                  <Select value={toQ} onChange={(q) => setOppTrendTo(quarterKeyToTo(q))}>
-                    {quarters.filter((q) => !fromQ || q >= fromQ).map((q) => (
-                      <option key={q} value={q}>{quarterKeyToLabel(q)}</option>
+                  <Select value={arrCacTo} onChange={(m) => setArrCacTo(m)}>
+                    {months.filter((m) => !arrCacFrom || m >= arrCacFrom).map((m) => (
+                      <option key={m} value={m}>{formatMonthShort(m)}</option>
                     ))}
                   </Select>
                 </>
-              );
-            })() : oppTrendView === 'yearly' ? (() => {
-              const years = monthsToYears(months);
-              const fromY = oppTrendFrom ? oppTrendFrom.slice(0, 4) : '';
-              const toY   = oppTrendTo   ? oppTrendTo.slice(0, 4)   : '';
-              return (
-                <>
-                  <Select value={fromY} onChange={(y) => setOppTrendFrom(`${y}-01`)}>
-                    {years.filter((y) => !toY || y <= toY).map((y) => (
-                      <option key={y} value={y}>{y}</option>
-                    ))}
-                  </Select>
-                  <span style={{ fontSize: 12, color: 'var(--color-neutral)' }}>to</span>
-                  <Select value={toY} onChange={(y) => setOppTrendTo(`${y}-12`)}>
-                    {years.filter((y) => !fromY || y >= fromY).map((y) => (
-                      <option key={y} value={y}>{y}</option>
-                    ))}
-                  </Select>
-                </>
-              );
-            })() : (
-              <>
-                <Select value={oppTrendFrom} onChange={(m) => setOppTrendFrom(m)}>
-                  {months.filter((m) => !oppTrendTo || m <= oppTrendTo).map((m) => (
-                    <option key={m} value={m}>{formatMonthShort(m)}</option>
-                  ))}
-                </Select>
-                <span style={{ fontSize: 12, color: 'var(--color-neutral)' }}>to</span>
-                <Select value={oppTrendTo} onChange={(m) => setOppTrendTo(m)}>
-                  {months.filter((m) => !oppTrendFrom || m >= oppTrendFrom).map((m) => (
-                    <option key={m} value={m}>{formatMonthShort(m)}</option>
-                  ))}
-                </Select>
-              </>
-            )}
+              )}
+            </div>
           </div>
+
+          {loadingArrCac ? (
+            <div className="animate-pulse" style={{ height: 280, borderRadius: 8, background: '#f1f5f9' }} />
+          ) : arrCacData.length === 0 ? (
+            <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 14 }}>
+              No data
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={280}>
+              <ComposedChart data={arrCacData} margin={{ top: 10, right: 40, bottom: 50, left: 50 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis
+                  dataKey="period"
+                  tick={{ fontSize: 10 }}
+                  angle={-35}
+                  textAnchor="end"
+                  height={50}
+                />
+                <YAxis
+                  yAxisId="left"
+                  orientation="left"
+                  tickFormatter={(v) => v.toLocaleString()}
+                  tick={{ fontSize: 10 }}
+                />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  tickFormatter={(v: number) => `${v.toFixed(1)}x`}
+                  tick={{ fontSize: 10 }}
+                />
+                <Tooltip
+                  formatter={(value: number, name: string) => {
+                    if (name === 'Closed Won') return [value.toLocaleString(), 'Closed Won'];
+                    if (name === 'ARR:CAC')    return [`${Number(value).toFixed(2)}x`, 'ARR:CAC'];
+                    return [value, name];
+                  }}
+                />
+                <Bar
+                  yAxisId="left"
+                  dataKey="won"
+                  name="Closed Won"
+                  fill="#22c55e"
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={40}
+                />
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="arr_cac_ratio"
+                  name="ARR:CAC"
+                  stroke="#a855f7"
+                  strokeWidth={2}
+                  dot={{ fill: '#a855f7', r: 4 }}
+                  connectNulls={false}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          )}
         </div>
 
-        {loadingOppTrend ? (
-          <div className="animate-pulse" style={{ height: 320, borderRadius: 8, background: '#f1f5f9' }} />
-        ) : oppTrendData.length === 0 ? (
-          <div style={{ height: 320, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 14 }}>
-            No data for selected period
+        {/* ── Chart 3: $ / Opp Trend ───────────────────────────────────────── */}
+        <div
+          id="chart-opp-trend"
+          className="chart-card rounded-xl shadow-sm group"
+          style={{
+            flex: 1,
+            background: '#ffffff',
+            border: '1px solid #e2e8f0',
+            padding: 20,
+          }}
+        >
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 12 }}>
+            <div>
+              <h2 style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--color-primary)', marginBottom: 2 }}>
+                $ / Opp Trend
+              </h2>
+              <p style={{ fontSize: 11, color: 'var(--color-neutral)' }}>
+                Bars = Opps | Line = $/Opp
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <ChartExportButton
+                elementId="chart-opp-trend"
+                title="$ / Opp Trend"
+                onAddToast={addToast}
+              />
+              <ToggleGroup<View>
+                options={[
+                  { label: 'M',   value: 'monthly'   },
+                  { label: 'Q',   value: 'quarterly' },
+                  { label: 'Y',   value: 'yearly'    },
+                ]}
+                value={oppTrendView}
+                onChange={handleOppTrendViewChange}
+              />
+
+              <div style={{ width: 1, height: 22, background: '#e2e8f0', flexShrink: 0 }} />
+
+              {oppTrendView === 'quarterly' ? (() => {
+                const quarters = monthsToQuarterKeys(months);
+                const fromQ = oppTrendFrom ? monthToQuarterKey(oppTrendFrom) : '';
+                const toQ   = oppTrendTo   ? monthToQuarterKey(oppTrendTo)   : '';
+                return (
+                  <>
+                    <Select value={fromQ} onChange={(q) => setOppTrendFrom(quarterKeyToFrom(q))}>
+                      {quarters.filter((q) => !toQ || q <= toQ).map((q) => (
+                        <option key={q} value={q}>{quarterKeyToLabel(q)}</option>
+                      ))}
+                    </Select>
+                    <span style={{ fontSize: 12, color: 'var(--color-neutral)' }}>to</span>
+                    <Select value={toQ} onChange={(q) => setOppTrendTo(quarterKeyToTo(q))}>
+                      {quarters.filter((q) => !fromQ || q >= fromQ).map((q) => (
+                        <option key={q} value={q}>{quarterKeyToLabel(q)}</option>
+                      ))}
+                    </Select>
+                  </>
+                );
+              })() : oppTrendView === 'yearly' ? (() => {
+                const years = monthsToYears(months);
+                const fromY = oppTrendFrom ? oppTrendFrom.slice(0, 4) : '';
+                const toY   = oppTrendTo   ? oppTrendTo.slice(0, 4)   : '';
+                return (
+                  <>
+                    <Select value={fromY} onChange={(y) => setOppTrendFrom(`${y}-01`)}>
+                      {years.filter((y) => !toY || y <= toY).map((y) => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                    </Select>
+                    <span style={{ fontSize: 12, color: 'var(--color-neutral)' }}>to</span>
+                    <Select value={toY} onChange={(y) => setOppTrendTo(`${y}-12`)}>
+                      {years.filter((y) => !fromY || y >= fromY).map((y) => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                    </Select>
+                  </>
+                );
+              })() : (
+                <>
+                  <Select value={oppTrendFrom} onChange={(m) => setOppTrendFrom(m)}>
+                    {months.filter((m) => !oppTrendTo || m <= oppTrendTo).map((m) => (
+                      <option key={m} value={m}>{formatMonthShort(m)}</option>
+                    ))}
+                  </Select>
+                  <span style={{ fontSize: 12, color: 'var(--color-neutral)' }}>to</span>
+                  <Select value={oppTrendTo} onChange={(m) => setOppTrendTo(m)}>
+                    {months.filter((m) => !oppTrendFrom || m >= oppTrendFrom).map((m) => (
+                      <option key={m} value={m}>{formatMonthShort(m)}</option>
+                    ))}
+                  </Select>
+                </>
+              )}
+            </div>
           </div>
-        ) : (
-          <ResponsiveContainer width="100%" height={320}>
-            <ComposedChart data={oppTrendData} margin={{ top: 20, right: 60, bottom: 60, left: 60 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis
-                dataKey="period"
-                tick={{ fontSize: 12 }}
-                angle={-35}
-                textAnchor="end"
-                height={70}
-              />
-              <YAxis
-                yAxisId="left"
-                orientation="left"
-                tickFormatter={(v: number) => v.toLocaleString()}
-                label={{ value: 'Opportunities (count)', angle: -90, position: 'insideLeft', offset: -10, style: { fontSize: 12, fill: '#64748b' } }}
-              />
-              <YAxis
-                yAxisId="right"
-                orientation="right"
-                tickFormatter={(v: number) => formatCurrency(v * 100)}
-                label={{ value: '$ / Opp', angle: 90, position: 'insideRight', offset: 10, style: { fontSize: 12, fill: '#64748b' } }}
-              />
-              <Tooltip
-                formatter={(value: number, name: string) => {
-                  if (name === 'Opportunities') return [value.toLocaleString(), 'Opportunities'];
-                  if (name === '$/Opp')         return [formatCurrency(value * 100), '$ / Opp'];
-                  return [value, name];
-                }}
-                labelFormatter={(label) => `Period: ${label}`}
-              />
-              <Legend verticalAlign="top" height={36} />
-              <Bar
-                yAxisId="left"
-                dataKey="opportunities"
-                name="Opportunities"
-                fill="#3b82f6"
-                radius={[4, 4, 0, 0]}
-                maxBarSize={60}
-              />
-              <Line
-                yAxisId="right"
-                type="monotone"
-                dataKey="dollar_per_opp"
-                name="$/Opp"
-                stroke="#f97316"
-                strokeWidth={2}
-                dot={{ fill: '#f97316', r: 5 }}
-                connectNulls={false}
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
-        )}
+
+          {loadingOppTrend ? (
+            <div className="animate-pulse" style={{ height: 280, borderRadius: 8, background: '#f1f5f9' }} />
+          ) : oppTrendData.length === 0 ? (
+            <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 14 }}>
+              No data
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={280}>
+              <ComposedChart data={oppTrendData} margin={{ top: 10, right: 40, bottom: 50, left: 50 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis
+                  dataKey="period"
+                  tick={{ fontSize: 10 }}
+                  angle={-35}
+                  textAnchor="end"
+                  height={50}
+                />
+                <YAxis
+                  yAxisId="left"
+                  orientation="left"
+                  tickFormatter={(v: number) => v.toLocaleString()}
+                  tick={{ fontSize: 10 }}
+                />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  tickFormatter={(v: number) => formatCurrency(v * 100)}
+                  tick={{ fontSize: 10 }}
+                />
+                <Tooltip
+                  formatter={(value: number, name: string) => {
+                    if (name === 'Opportunities') return [value.toLocaleString(), 'Opps'];
+                    if (name === '$/Opp')         return [formatCurrency(value * 100), '$/Opp'];
+                    return [value, name];
+                  }}
+                />
+                <Bar
+                  yAxisId="left"
+                  dataKey="opportunities"
+                  name="Opportunities"
+                  fill="#3b82f6"
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={40}
+                />
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="dollar_per_opp"
+                  name="$/Opp"
+                  stroke="#f97316"
+                  strokeWidth={2}
+                  dot={{ fill: '#f97316', r: 4 }}
+                  connectNulls={false}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          )}
+        </div>
       </div>
 
       {/* ── Toast notifications ──────────────────────────────────────────── */}
