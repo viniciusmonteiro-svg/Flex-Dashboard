@@ -15,6 +15,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { toPng, toSvg } from 'html-to-image';
+import domtoimage from 'dom-to-image-more';
 import { formatMonthShort, formatCurrency, formatNumber } from '@/lib/format';
 import { ToastContainer, type ToastItem } from '@/components/ui/Toast';
 import type { KpiResponse, KpiTrend, ChannelBreakdown } from '@/app/api/dashboard/kpis/route';
@@ -217,24 +218,61 @@ function ExportModal({ isOpen, onClose, elementId, title, onAddToast }: ExportMo
     const cleanup = addExportStyles(element);
 
     try {
-      // Get actual chart dimensions
-      const chartRect = element.getBoundingClientRect();
-      const actualWidth = chartRect.width;
+      // Get actual chart dimensions and set explicit values for html-to-image
+      const actualWidth = element.offsetWidth;
+      const actualHeight = element.offsetHeight;
       const scaleFactor = targetWidth > 0 ? targetWidth / actualWidth : 2;
 
       const filter = (node: HTMLElement) => {
-        return !node.classList.contains('chart-export-btn') &&
-               !node.classList.contains('export-modal') &&
-               !node.classList.contains('modal-overlay');
+        // Skip external resources that cause CORS issues
+        const tagName = node.tagName?.toUpperCase();
+        if (tagName === 'LINK' && node.getAttribute('rel') === 'stylesheet') return false;
+        if (tagName === 'SCRIPT') return false;
+        // Skip export UI elements
+        if (node.classList?.contains('chart-export-btn')) return false;
+        if (node.classList?.contains('export-modal')) return false;
+        if (node.classList?.contains('modal-overlay')) return false;
+        return true;
       };
 
       if (format === 'png') {
-        const dataUrl = await toPng(element, {
-          pixelRatio: scaleFactor,
-          backgroundColor: '#ffffff',
-          filter,
-          style: { transform: 'none' },
-        });
+        let dataUrl: string;
+        try {
+          dataUrl = await toPng(element, {
+            width: actualWidth,
+            height: actualHeight,
+            pixelRatio: scaleFactor,
+            backgroundColor: '#ffffff',
+            cacheBust: true,
+            skipFonts: true,
+            filter,
+            style: {
+              transform: 'none',
+              maxWidth: 'none',
+              maxHeight: 'none',
+            },
+          });
+        } catch (primaryErr) {
+          // Fallback to dom-to-image-more if html-to-image fails
+          console.warn('[ChartExport] html-to-image failed, trying dom-to-image-more:', primaryErr);
+          const blob = await domtoimage.toBlob(element, {
+            width: actualWidth,
+            height: actualHeight,
+            pixelRatio: scaleFactor,
+            bgcolor: '#ffffff',
+            style: {
+              transform: 'none',
+              maxWidth: 'none',
+              maxHeight: 'none',
+            },
+          });
+          dataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        }
         const link = document.createElement('a');
         link.download = `${baseFilename}.png`;
         link.href = dataUrl;
@@ -242,9 +280,17 @@ function ExportModal({ isOpen, onClose, elementId, title, onAddToast }: ExportMo
         onAddToast(`${title} exported as PNG`, 'success');
       } else {
         const dataUrl = await toSvg(element, {
+          width: actualWidth,
+          height: actualHeight,
           backgroundColor: '#ffffff',
+          cacheBust: true,
+          skipFonts: true,
           filter,
-          style: { transform: 'none' },
+          style: {
+            transform: 'none',
+            maxWidth: 'none',
+            maxHeight: 'none',
+          },
         });
         const link = document.createElement('a');
         link.download = `${baseFilename}.svg`;
@@ -255,7 +301,12 @@ function ExportModal({ isOpen, onClose, elementId, title, onAddToast }: ExportMo
       onClose();
     } catch (err) {
       console.error('[ChartExport] Export error:', err);
-      onAddToast('Failed to export chart', 'error');
+      console.error('Error details:', {
+        message: (err as Error)?.message,
+        stack: (err as Error)?.stack,
+        name: (err as Error)?.name,
+      });
+      onAddToast(`Export failed: ${(err as Error)?.message || 'Unknown error'}`, 'error');
     } finally {
       cleanup();
       setIsExporting(false);
@@ -275,17 +326,42 @@ function ExportModal({ isOpen, onClose, elementId, title, onAddToast }: ExportMo
     const cleanup = addExportStyles(element);
 
     try {
-      const chartRect = element.getBoundingClientRect();
-      const actualWidth = chartRect.width;
+      const actualWidth = element.offsetWidth;
+      const actualHeight = element.offsetHeight;
       const scaleFactor = targetWidth > 0 ? targetWidth / actualWidth : 2;
 
-      const dataUrl = await toPng(element, {
-        pixelRatio: scaleFactor,
-        backgroundColor: '#ffffff',
-      });
-
-      const response = await fetch(dataUrl);
-      const blob = await response.blob();
+      let blob: Blob;
+      try {
+        const dataUrl = await toPng(element, {
+          width: actualWidth,
+          height: actualHeight,
+          pixelRatio: scaleFactor,
+          backgroundColor: '#ffffff',
+          cacheBust: true,
+          skipFonts: true,
+          style: {
+            transform: 'none',
+            maxWidth: 'none',
+            maxHeight: 'none',
+          },
+        });
+        const response = await fetch(dataUrl);
+        blob = await response.blob();
+      } catch (primaryErr) {
+        // Fallback to dom-to-image-more if html-to-image fails
+        console.warn('[ChartExport] html-to-image clipboard failed, trying dom-to-image-more:', primaryErr);
+        blob = await domtoimage.toBlob(element, {
+          width: actualWidth,
+          height: actualHeight,
+          pixelRatio: scaleFactor,
+          bgcolor: '#ffffff',
+          style: {
+            transform: 'none',
+            maxWidth: 'none',
+            maxHeight: 'none',
+          },
+        });
+      }
 
       await navigator.clipboard.write([
         new ClipboardItem({ 'image/png': blob })
@@ -294,7 +370,12 @@ function ExportModal({ isOpen, onClose, elementId, title, onAddToast }: ExportMo
       onClose();
     } catch (err) {
       console.error('[ChartExport] Clipboard error:', err);
-      onAddToast('Failed to copy chart to clipboard', 'error');
+      console.error('Error details:', {
+        message: (err as Error)?.message,
+        stack: (err as Error)?.stack,
+        name: (err as Error)?.name,
+      });
+      onAddToast(`Copy failed: ${(err as Error)?.message || 'Unknown error'}`, 'error');
     } finally {
       cleanup();
       setIsExporting(false);

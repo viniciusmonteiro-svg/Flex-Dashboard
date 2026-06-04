@@ -21,6 +21,7 @@
     "@types/papaparse": "^5.5.2",
     "@types/pg": "^8.20.0",
     "clsx": "^2.1.1",
+    "dom-to-image-more": "^3.7.2",
     "dotenv": "^16.6.1",
     "googleapis": "^171.4.0",
     "html-to-image": "^1.11.13",
