@@ -14,13 +14,319 @@ import {
   ComposedChart,
   ResponsiveContainer,
 } from 'recharts';
+import { toPng, toSvg } from 'html-to-image';
 import { formatMonthShort, formatCurrency, formatNumber } from '@/lib/format';
+import { ToastContainer, type ToastItem } from '@/components/ui/Toast';
 import type { KpiResponse, KpiTrend, ChannelBreakdown } from '@/app/api/dashboard/kpis/route';
 import type { KpiSummaryResponse, KpiSummaryRow } from '@/app/api/dashboard/kpi-summary/route';
 import type { KpiSummaryCohortResponse, KpiSummaryCohortRow } from '@/app/api/dashboard/kpi-summary-cohort/route';
 import type { ChannelChartRow } from '@/app/api/dashboard/channel-chart/route';
 import type { ArrCacRow, ArrCacResponse } from '@/app/api/dashboard/arr-cac-chart/route';
 import type { OppTrendRow, OppTrendResponse } from '@/app/api/dashboard/opp-trend-chart/route';
+
+// ─── Chart Export Utilities ───────────────────────────────────────────────────
+
+interface ExportOptions {
+  elementId: string;
+  filename: string;
+  title: string;
+  subtitle?: string;
+}
+
+function addExportStyles(element: HTMLElement): () => void {
+  const originalBg = element.style.background;
+  const originalPosition = element.style.position;
+
+  // Set white background and ensure proper rendering
+  element.style.background = '#ffffff';
+  element.style.position = 'relative';
+
+  // Add watermark
+  const watermark = document.createElement('div');
+  watermark.id = 'chart-export-watermark';
+  watermark.textContent = 'Marketing Dashboard';
+  watermark.style.cssText = `
+    position: absolute;
+    bottom: 8px;
+    right: 12px;
+    font-size: 11px;
+    color: #94a3b8;
+    font-family: system-ui, sans-serif;
+    pointer-events: none;
+    z-index: 100;
+  `;
+  element.appendChild(watermark);
+
+  // Return cleanup function
+  return () => {
+    element.style.background = originalBg;
+    element.style.position = originalPosition;
+    const wm = element.querySelector('#chart-export-watermark');
+    if (wm) wm.remove();
+  };
+}
+
+async function captureChart(
+  element: HTMLElement,
+  type: 'png' | 'svg',
+  options: { title: string }
+): Promise<string> {
+  const filter = (node: HTMLElement) => {
+    // Exclude the export button from capture
+    return !node.classList.contains('chart-export-btn');
+  };
+
+  const cleanup = addExportStyles(element);
+
+  try {
+    if (type === 'png') {
+      return await toPng(element, {
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
+        filter,
+        style: {
+          transform: 'none',
+        },
+      });
+    } else {
+      return await toSvg(element, {
+        backgroundColor: '#ffffff',
+        filter,
+        style: {
+          transform: 'none',
+        },
+      });
+    }
+  } finally {
+    cleanup();
+  }
+}
+
+async function downloadChart(element: HTMLElement, type: 'png' | 'svg', options: ExportOptions, addToast: (msg: string, t: ToastItem['type']) => void) {
+  const cleanup = addExportStyles(element);
+  try {
+    const dataUrl = type === 'png'
+      ? await toPng(element, { pixelRatio: 2, backgroundColor: '#ffffff' })
+      : await toSvg(element, { backgroundColor: '#ffffff' });
+
+    const link = document.createElement('a');
+    link.download = options.filename;
+    link.href = dataUrl;
+    link.click();
+    addToast(`${options.title} exported as ${type.toUpperCase()}`, 'success');
+  } catch (err) {
+    console.error('[ChartExport] Download error:', err);
+    addToast('Failed to export chart', 'error');
+  } finally {
+    cleanup();
+  }
+}
+
+async function copyToClipboard(element: HTMLElement, options: ExportOptions, addToast: (msg: string, t: ToastItem['type']) => void) {
+  const cleanup = addExportStyles(element);
+  try {
+    const blob = await toPng(element, { pixelRatio: 2, backgroundColor: '#ffffff' })
+      .then(async (dataUrl) => {
+        const response = await fetch(dataUrl);
+        return response.blob();
+      });
+
+    await navigator.clipboard.write([
+      new ClipboardItem({ 'image/png': blob })
+    ]);
+    addToast('Chart copied to clipboard', 'success');
+  } catch (err) {
+    console.error('[ChartExport] Clipboard error:', err);
+    addToast('Failed to copy chart to clipboard', 'error');
+  } finally {
+    cleanup();
+  }
+}
+
+// ─── Chart Export Button Component ───────────────────────────────────────────
+
+interface ChartExportButtonProps {
+  elementId: string;
+  title: string;
+  onAddToast: (msg: string, t: ToastItem['type']) => void;
+}
+
+function ChartExportButton({ elementId, title, onAddToast }: ChartExportButtonProps) {
+  const [showMenu, setShowMenu] = useState(false);
+  const [loading, setLoading] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(e.target as Node) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(e.target as Node)
+      ) {
+        setShowMenu(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleExport = async (type: 'png' | 'svg' | 'clipboard') => {
+    const element = document.getElementById(elementId);
+    if (!element) {
+      onAddToast('Export element not found', 'error');
+      setShowMenu(false);
+      return;
+    }
+
+    setLoading(type);
+    const today = new Date().toISOString().split('T')[0];
+    const filename = `${title.toLowerCase().replace(/\s+/g, '-')}-${today}`;
+    const options: ExportOptions = { elementId, filename, title };
+
+    if (type === 'png') {
+      await downloadChart(element, 'png', options, onAddToast);
+    } else if (type === 'svg') {
+      await downloadChart(element, 'svg', { ...options, filename: `${filename}.svg` }, onAddToast);
+    } else {
+      await copyToClipboard(element, options, onAddToast);
+    }
+
+    setLoading(null);
+    setShowMenu(false);
+  };
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        ref={buttonRef}
+        className="chart-export-btn"
+        onClick={() => setShowMenu(!showMenu)}
+        title="Export chart"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 32,
+          height: 32,
+          border: '1px solid #e2e8f0',
+          borderRadius: 6,
+          background: '#ffffff',
+          cursor: 'pointer',
+          color: '#64748b',
+          transition: 'all 0.15s ease',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.borderColor = '#3b82f6';
+          e.currentTarget.style.color = '#3b82f6';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.borderColor = '#e2e8f0';
+          e.currentTarget.style.color = '#64748b';
+        }}
+      >
+        {loading ? (
+          <span style={{ fontSize: 14 }}>⟳</span>
+        ) : (
+          <span style={{ fontSize: 16 }}>⬇</span>
+        )}
+      </button>
+
+      {showMenu && (
+        <div
+          ref={menuRef}
+          style={{
+            position: 'absolute',
+            top: '100%',
+            right: 0,
+            marginTop: 4,
+            background: '#ffffff',
+            border: '1px solid #e2e8f0',
+            borderRadius: 8,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            overflow: 'hidden',
+            zIndex: 50,
+            minWidth: 160,
+          }}
+        >
+          <button
+            className="chart-export-btn"
+            onClick={() => handleExport('png')}
+            disabled={!!loading}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              width: '100%',
+              padding: '10px 14px',
+              border: 'none',
+              background: 'transparent',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              fontSize: 13,
+              color: '#1e293b',
+              textAlign: 'left',
+              opacity: loading ? 0.5 : 1,
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
+            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+          >
+            <span>📷</span> Download PNG
+          </button>
+          <button
+            className="chart-export-btn"
+            onClick={() => handleExport('svg')}
+            disabled={!!loading}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              width: '100%',
+              padding: '10px 14px',
+              border: 'none',
+              borderTop: '1px solid #f1f5f9',
+              background: 'transparent',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              fontSize: 13,
+              color: '#1e293b',
+              textAlign: 'left',
+              opacity: loading ? 0.5 : 1,
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
+            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+          >
+            <span>📐</span> Download SVG
+          </button>
+          <button
+            className="chart-export-btn"
+            onClick={() => handleExport('clipboard')}
+            disabled={!!loading}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              width: '100%',
+              padding: '10px 14px',
+              border: 'none',
+              borderTop: '1px solid #f1f5f9',
+              background: 'transparent',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              fontSize: 13,
+              color: '#1e293b',
+              textAlign: 'left',
+              opacity: loading ? 0.5 : 1,
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
+            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+          >
+            <span>📋</span> Copy to Clipboard
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1109,6 +1415,18 @@ export default function DashboardClient() {
   const initialized = useRef(false);
   const isQoQ = preset === 'qoq';
 
+  // ── Toast notifications ────────────────────────────────────────────────────
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+
+  const addToast = useCallback((message: string, type: ToastItem['type']) => {
+    const id = Math.random().toString(36).slice(2);
+    setToasts((prev) => [...prev, { id, message, type }]);
+  }, []);
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
   // ── Load months list ───────────────────────────────────────────────────────
   useEffect(() => {
     fetch('/api/salesforce/months')
@@ -1624,7 +1942,8 @@ export default function DashboardClient() {
 
       {/* ── Channel Chart: Closed Won & CAC ──────────────────────────────── */}
       <div
-        className="rounded-xl shadow-sm"
+        id="chart-channel-cac"
+        className="chart-card rounded-xl shadow-sm group"
         style={{
           background: '#ffffff',
           border: '1px solid #e2e8f0',
@@ -1644,6 +1963,11 @@ export default function DashboardClient() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <ChartExportButton
+              elementId="chart-channel-cac"
+              title="Closed Won & Cohort CAC by Channel"
+              onAddToast={addToast}
+            />
             <ToggleGroup<View>
               options={[
                 { label: 'Monthly',   value: 'monthly'   },
@@ -1749,7 +2073,8 @@ export default function DashboardClient() {
 
       {/* ── Chart 2: Closed Won Deals & ARR:CAC Ratio ────────────────────── */}
       <div
-        className="rounded-xl shadow-sm"
+        id="chart-arr-cac"
+        className="chart-card rounded-xl shadow-sm group"
         style={{
           background: '#ffffff',
           border: '1px solid #e2e8f0',
@@ -1769,6 +2094,11 @@ export default function DashboardClient() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <ChartExportButton
+              elementId="chart-arr-cac"
+              title="Closed Won Deals & ARR:CAC Ratio"
+              onAddToast={addToast}
+            />
             <ToggleGroup<View>
               options={[
                 { label: 'Monthly',   value: 'monthly'   },
@@ -1941,7 +2271,8 @@ export default function DashboardClient() {
 
       {/* ── Chart 3: $ / Opp Trend ───────────────────────────────────────── */}
       <div
-        className="rounded-xl shadow-sm"
+        id="chart-opp-trend"
+        className="chart-card rounded-xl shadow-sm group"
         style={{
           background: '#ffffff',
           border: '1px solid #e2e8f0',
@@ -1961,6 +2292,11 @@ export default function DashboardClient() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <ChartExportButton
+              elementId="chart-opp-trend"
+              title="$ / Opp Trend"
+              onAddToast={addToast}
+            />
             <ToggleGroup<View>
               options={[
                 { label: 'Monthly',   value: 'monthly'   },
@@ -2090,6 +2426,8 @@ export default function DashboardClient() {
         )}
       </div>
 
+      {/* ── Toast notifications ──────────────────────────────────────────── */}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
     </div>
   );
