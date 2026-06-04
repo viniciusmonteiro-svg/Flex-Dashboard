@@ -72,8 +72,10 @@ async function captureChart(
   options: { title: string }
 ): Promise<string> {
   const filter = (node: HTMLElement) => {
-    // Exclude the export button from capture
-    return !node.classList.contains('chart-export-btn');
+    // Exclude export UI elements from capture
+    return !node.classList.contains('chart-export-btn') &&
+           !node.classList.contains('export-modal') &&
+           !node.classList.contains('modal-overlay');
   };
 
   const cleanup = addExportStyles(element);
@@ -143,6 +145,379 @@ async function copyToClipboard(element: HTMLElement, options: ExportOptions, add
   }
 }
 
+// ─── Chart Export Modal Component ────────────────────────────────────────────
+
+type SizePreset = 'small' | 'medium' | 'large' | 'full';
+type ExportFormat = 'png' | 'svg';
+
+interface ExportModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  elementId: string;
+  title: string;
+  onAddToast: (msg: string, t: ToastItem['type']) => void;
+}
+
+const SIZE_PRESETS: { value: SizePreset; label: string; width: number }[] = [
+  { value: 'small', label: 'Small — 800px', width: 800 },
+  { value: 'medium', label: 'Medium — 1200px', width: 1200 },
+  { value: 'large', label: 'Large — 1600px', width: 1600 },
+  { value: 'full', label: 'Full Size', width: 0 },
+];
+
+function ExportModal({ isOpen, onClose, elementId, title, onAddToast }: ExportModalProps) {
+  const [sizePreset, setSizePreset] = useState<SizePreset>('medium');
+  const [customWidth, setCustomWidth] = useState<string>('');
+  const [format, setFormat] = useState<ExportFormat>('png');
+  const [isExporting, setIsExporting] = useState(false);
+
+  // Reset state when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setSizePreset('medium');
+      setCustomWidth('');
+      setFormat('png');
+      setIsExporting(false);
+    }
+  }, [isOpen]);
+
+  // Close on escape key
+  useEffect(() => {
+    function handleEscape(e: KeyboardEvent) {
+      if (e.key === 'Escape' && isOpen) onClose();
+    }
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  const getTargetWidth = (): number => {
+    if (sizePreset === 'full') return 0;
+    if (customWidth && !isNaN(Number(customWidth)) && Number(customWidth) > 0) {
+      return Number(customWidth);
+    }
+    const preset = SIZE_PRESETS.find((p) => p.value === sizePreset);
+    return preset?.width ?? 1200;
+  };
+
+  const handleExport = async () => {
+    const element = document.getElementById(elementId);
+    if (!element) {
+      onAddToast('Export element not found', 'error');
+      onClose();
+      return;
+    }
+
+    setIsExporting(true);
+    const targetWidth = getTargetWidth();
+    const today = new Date().toISOString().split('T')[0];
+    const baseFilename = `${title.toLowerCase().replace(/\s+/g, '-')}-${today}`;
+
+    const cleanup = addExportStyles(element);
+
+    try {
+      // Get actual chart dimensions
+      const chartRect = element.getBoundingClientRect();
+      const actualWidth = chartRect.width;
+      const scaleFactor = targetWidth > 0 ? targetWidth / actualWidth : 2;
+
+      const filter = (node: HTMLElement) => {
+        return !node.classList.contains('chart-export-btn') &&
+               !node.classList.contains('export-modal') &&
+               !node.classList.contains('modal-overlay');
+      };
+
+      if (format === 'png') {
+        const dataUrl = await toPng(element, {
+          pixelRatio: scaleFactor,
+          backgroundColor: '#ffffff',
+          filter,
+          style: { transform: 'none' },
+        });
+        const link = document.createElement('a');
+        link.download = `${baseFilename}.png`;
+        link.href = dataUrl;
+        link.click();
+        onAddToast(`${title} exported as PNG`, 'success');
+      } else {
+        const dataUrl = await toSvg(element, {
+          backgroundColor: '#ffffff',
+          filter,
+          style: { transform: 'none' },
+        });
+        const link = document.createElement('a');
+        link.download = `${baseFilename}.svg`;
+        link.href = dataUrl;
+        link.click();
+        onAddToast(`${title} exported as SVG`, 'success');
+      }
+      onClose();
+    } catch (err) {
+      console.error('[ChartExport] Export error:', err);
+      onAddToast('Failed to export chart', 'error');
+    } finally {
+      cleanup();
+      setIsExporting(false);
+    }
+  };
+
+  const handleCopyToClipboard = async () => {
+    const element = document.getElementById(elementId);
+    if (!element) {
+      onAddToast('Export element not found', 'error');
+      onClose();
+      return;
+    }
+
+    setIsExporting(true);
+    const targetWidth = getTargetWidth();
+    const cleanup = addExportStyles(element);
+
+    try {
+      const chartRect = element.getBoundingClientRect();
+      const actualWidth = chartRect.width;
+      const scaleFactor = targetWidth > 0 ? targetWidth / actualWidth : 2;
+
+      const dataUrl = await toPng(element, {
+        pixelRatio: scaleFactor,
+        backgroundColor: '#ffffff',
+      });
+
+      const response = await fetch(dataUrl);
+      const blob = await response.blob();
+
+      await navigator.clipboard.write([
+        new ClipboardItem({ 'image/png': blob })
+      ]);
+      onAddToast('Chart copied to clipboard', 'success');
+      onClose();
+    } catch (err) {
+      console.error('[ChartExport] Clipboard error:', err);
+      onAddToast('Failed to copy chart to clipboard', 'error');
+    } finally {
+      cleanup();
+      setIsExporting(false);
+    }
+  };
+
+  return (
+    <div
+      className="modal-overlay export-modal"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+      }}
+    >
+      <div
+        className="export-modal"
+        style={{
+          background: '#ffffff',
+          borderRadius: 12,
+          padding: 24,
+          width: 400,
+          maxWidth: '90vw',
+          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.15)',
+          fontFamily: 'system-ui, sans-serif',
+        }}
+      >
+        {/* Header */}
+        <div style={{ marginBottom: 20 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-primary)', margin: 0, marginBottom: 4 }}>
+            Export Chart
+          </h3>
+          <p style={{ fontSize: 13, color: 'var(--color-neutral)', margin: 0 }}>
+            {title}
+          </p>
+        </div>
+
+        {/* Size Presets */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--color-neutral)', marginBottom: 8 }}>
+            Size Preset
+          </label>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {SIZE_PRESETS.map((preset) => (
+              <button
+                key={preset.value}
+                onClick={() => setSizePreset(preset.value)}
+                style={{
+                  padding: '8px 12px',
+                  border: `1px solid ${sizePreset === preset.value ? 'var(--color-primary)' : '#e2e8f0'}`,
+                  borderRadius: 6,
+                  background: sizePreset === preset.value ? 'var(--color-primary)' : '#ffffff',
+                  color: sizePreset === preset.value ? '#ffffff' : 'var(--color-primary)',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Custom Width */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--color-neutral)', marginBottom: 8 }}>
+            Custom Width (optional)
+          </label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 13, color: 'var(--color-primary)' }}>Width:</span>
+            <input
+              type="number"
+              value={customWidth}
+              onChange={(e) => setCustomWidth(e.target.value)}
+              placeholder={getTargetWidth() > 0 ? String(getTargetWidth()) : 'auto'}
+              min={100}
+              max={4000}
+              style={{
+                width: 100,
+                padding: '8px 12px',
+                border: '1px solid #e2e8f0',
+                borderRadius: 6,
+                fontSize: 13,
+                color: 'var(--color-primary)',
+                outline: 'none',
+              }}
+            />
+            <span style={{ fontSize: 13, color: 'var(--color-primary)' }}>px</span>
+            <span style={{ fontSize: 11, color: 'var(--color-neutral)' }}>
+              (auto height)
+            </span>
+          </div>
+        </div>
+
+        {/* Format Selector */}
+        <div style={{ marginBottom: 24 }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--color-neutral)', marginBottom: 8 }}>
+            Format
+          </label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => setFormat('png')}
+              style={{
+                flex: 1,
+                padding: '10px 16px',
+                border: `1px solid ${format === 'png' ? 'var(--color-primary)' : '#e2e8f0'}`,
+                borderRadius: 6,
+                background: format === 'png' ? 'var(--color-primary)' : '#ffffff',
+                color: format === 'png' ? '#ffffff' : 'var(--color-primary)',
+                fontSize: 13,
+                fontWeight: 500,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              PNG
+            </button>
+            <button
+              onClick={() => setFormat('svg')}
+              style={{
+                flex: 1,
+                padding: '10px 16px',
+                border: `1px solid ${format === 'svg' ? 'var(--color-primary)' : '#e2e8f0'}`,
+                borderRadius: 6,
+                background: format === 'svg' ? 'var(--color-primary)' : '#ffffff',
+                color: format === 'svg' ? '#ffffff' : 'var(--color-primary)',
+                fontSize: 13,
+                fontWeight: 500,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              SVG
+            </button>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+          <button
+            onClick={onClose}
+            disabled={isExporting}
+            style={{
+              padding: '10px 20px',
+              border: '1px solid #e2e8f0',
+              borderRadius: 6,
+              background: '#ffffff',
+              color: 'var(--color-primary)',
+              fontSize: 13,
+              fontWeight: 500,
+              cursor: isExporting ? 'not-allowed' : 'pointer',
+              opacity: isExporting ? 0.6 : 1,
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleExport}
+            disabled={isExporting}
+            style={{
+              padding: '10px 20px',
+              border: 'none',
+              borderRadius: 6,
+              background: 'var(--color-primary)',
+              color: '#ffffff',
+              fontSize: 13,
+              fontWeight: 500,
+              cursor: isExporting ? 'not-allowed' : 'pointer',
+              opacity: isExporting ? 0.6 : 1,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            {isExporting ? (
+              <>
+                <span>⟳</span> Exporting...
+              </>
+            ) : (
+              <>
+                <span>⬇</span> Download
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Copy to Clipboard (secondary action) */}
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #f1f5f9' }}>
+          <button
+            onClick={handleCopyToClipboard}
+            disabled={isExporting}
+            style={{
+              width: '100%',
+              padding: '8px 16px',
+              border: '1px solid #e2e8f0',
+              borderRadius: 6,
+              background: '#ffffff',
+              color: 'var(--color-neutral)',
+              fontSize: 12,
+              fontWeight: 500,
+              cursor: isExporting ? 'not-allowed' : 'pointer',
+              opacity: isExporting ? 0.6 : 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+            }}
+          >
+            📋 Copy to Clipboard
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Chart Export Button Component ───────────────────────────────────────────
 
 interface ChartExportButtonProps {
@@ -153,7 +528,7 @@ interface ChartExportButtonProps {
 
 function ChartExportButton({ elementId, title, onAddToast }: ChartExportButtonProps) {
   const [showMenu, setShowMenu] = useState(false);
-  const [loading, setLoading] = useState<string | null>(null);
+  const [showModal, setShowModal] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -173,158 +548,100 @@ function ChartExportButton({ elementId, title, onAddToast }: ChartExportButtonPr
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleExport = async (type: 'png' | 'svg' | 'clipboard') => {
-    const element = document.getElementById(elementId);
-    if (!element) {
-      onAddToast('Export element not found', 'error');
-      setShowMenu(false);
-      return;
-    }
-
-    setLoading(type);
-    const today = new Date().toISOString().split('T')[0];
-    const filename = `${title.toLowerCase().replace(/\s+/g, '-')}-${today}`;
-    const options: ExportOptions = { elementId, filename, title };
-
-    if (type === 'png') {
-      await downloadChart(element, 'png', options, onAddToast);
-    } else if (type === 'svg') {
-      await downloadChart(element, 'svg', { ...options, filename: `${filename}.svg` }, onAddToast);
-    } else {
-      await copyToClipboard(element, options, onAddToast);
-    }
-
-    setLoading(null);
+  const handleExportClick = async () => {
+    // Close dropdown immediately
     setShowMenu(false);
+
+    // Wait for dropdown animation to complete before showing modal
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Show the export modal
+    setShowModal(true);
   };
 
   return (
-    <div style={{ position: 'relative' }}>
-      <button
-        ref={buttonRef}
-        className="chart-export-btn"
-        onClick={() => setShowMenu(!showMenu)}
-        title="Export chart"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: 32,
-          height: 32,
-          border: '1px solid #e2e8f0',
-          borderRadius: 6,
-          background: '#ffffff',
-          cursor: 'pointer',
-          color: '#64748b',
-          transition: 'all 0.15s ease',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.borderColor = '#3b82f6';
-          e.currentTarget.style.color = '#3b82f6';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.borderColor = '#e2e8f0';
-          e.currentTarget.style.color = '#64748b';
-        }}
-      >
-        {loading ? (
-          <span style={{ fontSize: 14 }}>⟳</span>
-        ) : (
-          <span style={{ fontSize: 16 }}>⬇</span>
-        )}
-      </button>
-
-      {showMenu && (
-        <div
-          ref={menuRef}
+    <>
+      <div style={{ position: 'relative' }}>
+        <button
+          ref={buttonRef}
+          className="chart-export-btn"
+          onClick={() => setShowMenu(!showMenu)}
+          title="Export chart"
           style={{
-            position: 'absolute',
-            top: '100%',
-            right: 0,
-            marginTop: 4,
-            background: '#ffffff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 32,
+            height: 32,
             border: '1px solid #e2e8f0',
-            borderRadius: 8,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-            overflow: 'hidden',
-            zIndex: 50,
-            minWidth: 160,
+            borderRadius: 6,
+            background: '#ffffff',
+            cursor: 'pointer',
+            color: '#64748b',
+            transition: 'all 0.15s ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = '#3b82f6';
+            e.currentTarget.style.color = '#3b82f6';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = '#e2e8f0';
+            e.currentTarget.style.color = '#64748b';
           }}
         >
-          <button
-            className="chart-export-btn"
-            onClick={() => handleExport('png')}
-            disabled={!!loading}
+          <span style={{ fontSize: 16 }}>⬇</span>
+        </button>
+
+        {showMenu && (
+          <div
+            ref={menuRef}
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              width: '100%',
-              padding: '10px 14px',
-              border: 'none',
-              background: 'transparent',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              fontSize: 13,
-              color: '#1e293b',
-              textAlign: 'left',
-              opacity: loading ? 0.5 : 1,
+              position: 'absolute',
+              top: '100%',
+              right: 0,
+              marginTop: 4,
+              background: '#ffffff',
+              border: '1px solid #e2e8f0',
+              borderRadius: 8,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+              overflow: 'hidden',
+              zIndex: 50,
+              minWidth: 160,
             }}
-            onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
-            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
           >
-            <span>📷</span> Download PNG
-          </button>
-          <button
-            className="chart-export-btn"
-            onClick={() => handleExport('svg')}
-            disabled={!!loading}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              width: '100%',
-              padding: '10px 14px',
-              border: 'none',
-              borderTop: '1px solid #f1f5f9',
-              background: 'transparent',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              fontSize: 13,
-              color: '#1e293b',
-              textAlign: 'left',
-              opacity: loading ? 0.5 : 1,
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
-            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-          >
-            <span>📐</span> Download SVG
-          </button>
-          <button
-            className="chart-export-btn"
-            onClick={() => handleExport('clipboard')}
-            disabled={!!loading}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              width: '100%',
-              padding: '10px 14px',
-              border: 'none',
-              borderTop: '1px solid #f1f5f9',
-              background: 'transparent',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              fontSize: 13,
-              color: '#1e293b',
-              textAlign: 'left',
-              opacity: loading ? 0.5 : 1,
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
-            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-          >
-            <span>📋</span> Copy to Clipboard
-          </button>
-        </div>
-      )}
-    </div>
+            <button
+              className="chart-export-btn"
+              onClick={handleExportClick}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                width: '100%',
+                padding: '10px 14px',
+                border: 'none',
+                background: 'transparent',
+                cursor: 'pointer',
+                fontSize: 13,
+                color: '#1e293b',
+                textAlign: 'left',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+            >
+              <span>📷</span> Export Chart...
+            </button>
+          </div>
+        )}
+      </div>
+
+      <ExportModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        elementId={elementId}
+        title={title}
+        onAddToast={onAddToast}
+      />
+    </>
   );
 }
 
