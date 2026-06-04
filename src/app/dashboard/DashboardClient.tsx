@@ -2410,13 +2410,13 @@ export default function DashboardClient() {
         </div>
 
         {loadingChart ? (
-          <div className="animate-pulse" style={{ height: 400, borderRadius: 8, background: '#f1f5f9' }} />
+          <div className="animate-pulse" style={{ height: 320, borderRadius: 8, background: '#f1f5f9' }} />
         ) : chartData.length === 0 ? (
-          <div style={{ height: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 14 }}>
+          <div style={{ height: 320, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 14 }}>
             No data for selected period
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={400}>
+          <ResponsiveContainer width="100%" height={320}>
             <ComposedChart data={chartData} margin={{ top: 20, right: 60, bottom: 60, left: 60 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis
@@ -2566,13 +2566,13 @@ export default function DashboardClient() {
         </div>
 
         {loadingArrCac ? (
-          <div className="animate-pulse" style={{ height: 400, borderRadius: 8, background: '#f1f5f9' }} />
+          <div className="animate-pulse" style={{ height: 320, borderRadius: 8, background: '#f1f5f9' }} />
         ) : arrCacData.length === 0 ? (
-          <div style={{ height: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 14 }}>
+          <div style={{ height: 320, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 14 }}>
             No data for selected period
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={400}>
+          <ResponsiveContainer width="100%" height={320}>
             <ComposedChart data={arrCacData} margin={{ top: 20, right: 60, bottom: 60, left: 60 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis
@@ -2764,13 +2764,13 @@ export default function DashboardClient() {
         </div>
 
         {loadingOppTrend ? (
-          <div className="animate-pulse" style={{ height: 400, borderRadius: 8, background: '#f1f5f9' }} />
+          <div className="animate-pulse" style={{ height: 320, borderRadius: 8, background: '#f1f5f9' }} />
         ) : oppTrendData.length === 0 ? (
-          <div style={{ height: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 14 }}>
+          <div style={{ height: 320, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 14 }}>
             No data for selected period
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={400}>
+          <ResponsiveContainer width="100%" height={320}>
             <ComposedChart data={oppTrendData} margin={{ top: 20, right: 60, bottom: 60, left: 60 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis
