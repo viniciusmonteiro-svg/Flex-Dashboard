@@ -2280,42 +2280,6 @@ export default function DashboardClient() {
         }}
       >
         <KpiCard
-          label="Opportunities"
-          tooltip="Total opportunities created in the period, stacked by channel"
-          value={kpis?.opportunities.current ?? 0}
-          color={ACCENT.opportunities}
-          trend={kpis?.opportunities.trend ?? []}
-          field="opportunities"
-          loading={loading}
-        />
-        <KpiCard
-          label="Demoed"
-          tooltip="Opportunities where a demo was completed, stacked by channel"
-          value={kpis?.demoed.current ?? 0}
-          color={ACCENT.demoed}
-          trend={kpis?.demoed.trend ?? []}
-          field="demoed"
-          loading={loading}
-        />
-        <KpiCard
-          label="New"
-          tooltip="New business opportunities (Order Type = New), stacked by channel"
-          value={kpis?.new_business.current ?? 0}
-          color={ACCENT.new_business}
-          trend={kpis?.new_business.trend ?? []}
-          field="new_business"
-          loading={loading}
-        />
-        <KpiCard
-          label="Upsell Group"
-          tooltip="Upsell opportunities (Order Type = Upsell Group), stacked by channel"
-          value={kpis?.upsell.current ?? 0}
-          color={ACCENT.upsell}
-          trend={kpis?.upsell.trend ?? []}
-          field="upsell"
-          loading={loading}
-        />
-        <KpiCard
           label="Show Rate"
           tooltip="Demoed ÷ Opportunities × 100"
           value={kpis?.show_rate.current ?? 0}
