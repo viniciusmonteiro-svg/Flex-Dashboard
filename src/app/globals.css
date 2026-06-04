@@ -16,18 +16,7 @@
   --color-chart-leads: #10b981;
 }
 
-/* Chart card export button - hidden by default, visible on hover */
+/* Chart card export button - always visible */
 .chart-card .chart-export-btn {
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-
-.chart-card:hover .chart-export-btn {
-  opacity: 1;
-}
-
-/* Ensure export button is always visible when menu is open */
-.chart-card .chart-export-btn:focus,
-.chart-card .chart-export-btn[aria-expanded="true"] {
   opacity: 1;
 }
