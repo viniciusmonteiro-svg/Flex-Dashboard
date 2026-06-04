@@ -18,5 +18,7 @@
 
 /* Chart card export button - always visible */
 .chart-card .chart-export-btn {
-  opacity: 1;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
 }
