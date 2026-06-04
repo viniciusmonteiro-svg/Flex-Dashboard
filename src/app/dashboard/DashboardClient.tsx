@@ -325,6 +325,17 @@ function ExportModal({ isOpen, onClose, elementId, title, onAddToast }: ExportMo
     const targetWidth = getTargetWidth();
     const cleanup = addExportStyles(element);
 
+    // Filter to exclude UI elements that shouldn't be in the export
+    const filter = (node: HTMLElement) => {
+      const tagName = node.tagName?.toUpperCase();
+      if (tagName === 'LINK' && node.getAttribute('rel') === 'stylesheet') return false;
+      if (tagName === 'SCRIPT') return false;
+      if (node.classList?.contains('chart-export-btn')) return false;
+      if (node.classList?.contains('export-modal')) return false;
+      if (node.classList?.contains('modal-overlay')) return false;
+      return true;
+    };
+
     try {
       const actualWidth = element.offsetWidth;
       const actualHeight = element.offsetHeight;
@@ -339,6 +350,7 @@ function ExportModal({ isOpen, onClose, elementId, title, onAddToast }: ExportMo
           backgroundColor: '#ffffff',
           cacheBust: true,
           skipFonts: true,
+          filter,
           style: {
             transform: 'none',
             maxWidth: 'none',
