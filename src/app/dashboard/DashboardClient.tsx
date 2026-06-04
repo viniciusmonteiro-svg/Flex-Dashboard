@@ -2357,22 +2357,21 @@ export default function DashboardClient() {
         style={{
           background: '#ffffff',
           border: '1px solid #e2e8f0',
-          padding: 24,
+          padding: 20,
           marginTop: 20,
-          marginBottom: 20,
         }}
       >
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 12 }}>
           <div>
-            <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--color-primary)', marginBottom: 2 }}>
+            <h2 style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--color-primary)', marginBottom: 2 }}>
               Closed Won &amp; Cohort CAC by Channel
             </h2>
-            <p style={{ fontSize: 12, color: 'var(--color-neutral)' }}>
-              Bar = Closed Won deals | Line = CAC ($ per won deal)
+            <p style={{ fontSize: 11, color: 'var(--color-neutral)' }}>
+              Bars = Closed Won | Line = CAC
             </p>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <ChartExportButton
               elementId="chart-channel-cac"
               title="Closed Won & Cohort CAC by Channel"
@@ -2380,9 +2379,9 @@ export default function DashboardClient() {
             />
             <ToggleGroup<View>
               options={[
-                { label: 'Monthly',   value: 'monthly'   },
-                { label: 'Quarterly', value: 'quarterly' },
-                { label: 'Yearly',    value: 'yearly'    },
+                { label: 'M',   value: 'monthly'   },
+                { label: 'Q',   value: 'quarterly' },
+                { label: 'Y',   value: 'yearly'    },
               ]}
               value={chartView}
               onChange={handleChartViewChange}
@@ -2422,33 +2421,33 @@ export default function DashboardClient() {
         </div>
 
         {loadingChart ? (
-          <div className="animate-pulse" style={{ height: 320, borderRadius: 8, background: '#f1f5f9' }} />
+          <div className="animate-pulse" style={{ height: 280, borderRadius: 8, background: '#f1f5f9' }} />
         ) : chartData.length === 0 ? (
-          <div style={{ height: 320, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 14 }}>
-            No data for selected period
+          <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 14 }}>
+            No data
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={320}>
-            <ComposedChart data={chartData} margin={{ top: 20, right: 60, bottom: 60, left: 60 }}>
+          <ResponsiveContainer width="100%" height={280}>
+            <ComposedChart data={chartData} margin={{ top: 10, right: 40, bottom: 50, left: 50 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis
                 dataKey="channel"
-                tick={{ fontSize: 12 }}
+                tick={{ fontSize: 10 }}
                 angle={-35}
                 textAnchor="end"
-                height={70}
+                height={50}
               />
               <YAxis
                 yAxisId="left"
                 orientation="left"
                 tickFormatter={(v) => v.toLocaleString()}
-                label={{ value: 'Closed Won (count)', angle: -90, position: 'insideLeft', offset: -10, style: { fontSize: 12, fill: '#64748b' } }}
+                tick={{ fontSize: 10 }}
               />
               <YAxis
                 yAxisId="right"
                 orientation="right"
                 tickFormatter={(v) => formatCurrency(v * 100)}
-                label={{ value: 'CAC ($)', angle: 90, position: 'insideRight', offset: 10, style: { fontSize: 12, fill: '#64748b' } }}
+                tick={{ fontSize: 10 }}
               />
               <Tooltip
                 formatter={(value: number, name: string) => {
@@ -2457,14 +2456,13 @@ export default function DashboardClient() {
                   return [value, name];
                 }}
               />
-              <Legend verticalAlign="top" height={36} />
               <Bar
                 yAxisId="left"
                 dataKey="won"
                 name="Closed Won"
                 fill="#3b82f6"
                 radius={[4, 4, 0, 0]}
-                maxBarSize={60}
+                maxBarSize={40}
               />
               <Line
                 yAxisId="right"
@@ -2473,7 +2471,7 @@ export default function DashboardClient() {
                 name="Cohort CAC"
                 stroke="#f97316"
                 strokeWidth={2}
-                dot={{ fill: '#f97316', r: 5 }}
+                dot={{ fill: '#f97316', r: 4 }}
                 connectNulls={false}
               />
             </ComposedChart>
