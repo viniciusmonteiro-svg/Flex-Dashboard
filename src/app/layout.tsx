@@ -19,8 +19,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Marketing Dashboard',
-  description: 'Curve Dental — FP&A Marketing Spend Analytics',
+  title: 'Flex Dental Dashboard',
+  description: 'Flex Dental — FP&A Marketing Spend Analytics',
 };
 
 export default function RootLayout({

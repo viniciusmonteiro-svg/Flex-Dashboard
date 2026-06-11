@@ -92,7 +92,7 @@ function parseAccountingPeriod(raw: string | undefined): string | null {
 export const netsuiteSpend: SourceDefinition<NetsuiteRow> = {
   name: 'netsuiteSpend',
   label: 'NetSuite Actuals',
-  subFolder: '1. Netsuite',
+  subFolder: '1. NetSuite',
   fileExtension: '.xls',
   monthFolderPattern: /^\d{4}$/,
   headerRowIndex: 6,
