@@ -2,19 +2,28 @@ import { UserButton } from '@clerk/nextjs';
 
 export function Header() {
   return (
-    <header className="sticky top-0 z-50 w-full bg-[var(--color-primary)] text-white">
-      <div className="mx-auto flex h-14 max-w-screen-2xl items-center justify-between px-6">
-        <span className="font-sans text-base font-bold tracking-tight">
-          Flex Dental Dashboard
-        </span>
-        <UserButton
-          appearance={{
-            elements: {
-              avatarBox: 'w-8 h-8',
-            },
-          }}
-        />
-      </div>
+    <header
+      style={{
+        height: 'var(--topbar-height)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+        padding: '0 28px',
+        borderBottom: '1px solid var(--color-border)',
+        backgroundColor: 'var(--color-surface)',
+        position: 'sticky',
+        top: 0,
+        zIndex: 40,
+        flexShrink: 0,
+      }}
+    >
+      <UserButton
+        appearance={{
+          elements: {
+            avatarBox: 'w-8 h-8',
+          },
+        }}
+      />
     </header>
   );
 }

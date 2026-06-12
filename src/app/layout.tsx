@@ -1,21 +1,27 @@
 import type { Metadata } from 'next';
-import { Inter, JetBrains_Mono } from 'next/font/google';
+import { Space_Grotesk, DM_Sans, DM_Mono } from 'next/font/google';
 import './globals.css';
 import { ClerkProvider } from '@clerk/nextjs';
-import { Header } from '@/components/Header';
-import { DashboardTabBar } from '@/components/DashboardTabBar';
+import { AppShell } from '@/components/AppShell';
 import { UnsavedChangesProvider } from '@/lib/UnsavedChangesContext';
 
-const inter = Inter({
+const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],
-  variable: '--font-inter',
+  variable: '--font-display',
   display: 'swap',
 });
 
-const jetbrainsMono = JetBrains_Mono({
+const dmSans = DM_Sans({
   subsets: ['latin'],
-  variable: '--font-jetbrains-mono',
+  variable: '--font-body',
   display: 'swap',
+});
+
+const dmMono = DM_Mono({
+  subsets: ['latin'],
+  variable: '--font-mono',
+  display: 'swap',
+  weight: ['300', '400', '500'],
 });
 
 export const metadata: Metadata = {
@@ -35,12 +41,13 @@ export default function RootLayout({
       signInFallbackRedirectUrl="/"
       signUpFallbackRedirectUrl="/"
     >
-      <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
-        <body className="min-h-screen bg-[var(--color-band)] font-sans antialiased">
+      <html
+        lang="en"
+        className={`${spaceGrotesk.variable} ${dmSans.variable} ${dmMono.variable}`}
+      >
+        <body>
           <UnsavedChangesProvider>
-            <Header />
-            <DashboardTabBar />
-            <main className="mx-auto max-w-screen-2xl px-6 py-6">{children}</main>
+            <AppShell>{children}</AppShell>
           </UnsavedChangesProvider>
         </body>
       </html>
