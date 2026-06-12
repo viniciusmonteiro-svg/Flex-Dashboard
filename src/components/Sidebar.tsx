@@ -32,13 +32,10 @@ export function Sidebar() {
   return (
     <aside
       style={{
-        width: 'var(--sidebar-width)',
+        width: '240px',
+        height: '100%',
+        minHeight: '100vh',
         backgroundColor: 'var(--color-sidebar)',
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        bottom: 0,
-        zIndex: 50,
         display: 'flex',
         flexDirection: 'column',
       }}

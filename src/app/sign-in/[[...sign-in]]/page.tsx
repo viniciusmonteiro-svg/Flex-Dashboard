@@ -86,11 +86,11 @@ export default function SignInPage() {
           appearance={{
             variables: {
               colorPrimary: '#00B4D8',
-              colorBackground: '#0A3552',
-              colorText: '#FFFFFF',
-              colorTextSecondary: 'rgba(255,255,255,0.55)',
-              colorInputBackground: 'rgba(255,255,255,0.06)',
-              colorInputText: '#FFFFFF',
+              colorBackground: '#FFFFFF',
+              colorText: '#062C43',
+              colorTextSecondary: '#5A7A8C',
+              colorInputBackground: '#F0F6FA',
+              colorInputText: '#062C43',
               borderRadius: '10px',
             },
             elements: {

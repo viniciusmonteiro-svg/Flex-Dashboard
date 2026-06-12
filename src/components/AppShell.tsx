@@ -16,16 +16,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
-      <Sidebar />
+      {/* Sidebar: sticky in flow — no fixed positioning, no marginLeft needed */}
       <div
         style={{
-          flex: 1,
-          marginLeft: 'var(--sidebar-width)',
-          display: 'flex',
-          flexDirection: 'column',
-          minHeight: '100vh',
+          width: '240px',
+          flexShrink: 0,
+          position: 'sticky',
+          top: 0,
+          height: '100vh',
+          overflowY: 'auto',
         }}
       >
+        <Sidebar />
+      </div>
+
+      {/* Main content */}
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <Header />
         <main style={{ flex: 1, padding: '28px 32px' }}>{children}</main>
       </div>
