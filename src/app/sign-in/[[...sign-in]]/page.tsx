@@ -13,7 +13,7 @@ export default function SignInPage() {
           'radial-gradient(ellipse 80% 60% at 50% 0%, rgba(0,180,216,0.12) 0%, transparent 70%)',
       }}
     >
-      {/* Left branding panel — hidden on small screens */}
+      {/* Left branding panel */}
       <div
         style={{
           flex: '0 0 400px',
@@ -23,7 +23,6 @@ export default function SignInPage() {
           padding: '60px 48px',
           borderRight: '1px solid rgba(255,255,255,0.07)',
         }}
-        className="hidden lg:flex"
       >
         <div
           style={{
