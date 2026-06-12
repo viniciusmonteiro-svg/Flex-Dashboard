@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ToggleGroup } from '@/components/ui/ToggleGroup';
 import {
   BarChart,
   Bar,
@@ -1137,51 +1138,7 @@ function KpiCard({ label, tooltip, value, color, trend, isRate = false, field, l
   );
 }
 
-// ─── Toggle group ─────────────────────────────────────────────────────────────
-
-function ToggleGroup<T extends string>({
-  options,
-  value,
-  onChange,
-  isDisabled,
-}: {
-  options:    { label: string; value: T }[];
-  value:      T;
-  onChange:   (v: T) => void;
-  isDisabled?: (v: T) => boolean;
-}) {
-  return (
-    <div
-      className="flex overflow-hidden"
-      style={{ border: '1px solid #e2e8f0', borderRadius: 9999 }}
-    >
-      {options.map((o) => {
-        const disabled = isDisabled?.(o.value) ?? false;
-        const active   = value === o.value;
-        return (
-          <button
-            key={o.value}
-            onClick={() => !disabled && onChange(o.value)}
-            disabled={disabled}
-            className="transition-colors"
-            style={{
-              padding: '6px 16px',
-              fontSize: 12,
-              fontWeight: 500,
-              cursor: disabled ? 'not-allowed' : 'pointer',
-              background: active ? 'var(--color-primary)' : 'transparent',
-              color: disabled ? '#cbd5e1' : active ? '#ffffff' : 'var(--color-neutral)',
-              border: 'none',
-              outline: 'none',
-            }}
-          >
-            {o.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
+// ToggleGroup is now in @/components/ui/ToggleGroup
 
 // ─── Styled select ────────────────────────────────────────────────────────────
 

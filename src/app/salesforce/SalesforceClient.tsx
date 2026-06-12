@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ToggleGroup } from '@/components/ui/ToggleGroup';
 import { formatCurrency, formatPercent, formatMonthShort } from '@/lib/format';
 import type { CohortResponse, ChannelCohort, CohortCell } from '@/app/api/salesforce/channels/route';
 import type { CampaignRow } from '@/app/api/salesforce/campaigns/route';
@@ -124,50 +125,7 @@ function fmtDollars(dollars: number | null): string {
   return formatCurrency(Math.round(dollars * 100));
 }
 
-// ─── sub-components ───────────────────────────────────────────────────────────
-
-function ToggleGroup<T extends string>({
-  options,
-  value,
-  onChange,
-  isDisabled,
-}: {
-  options: { label: string; value: T }[];
-  value: T;
-  onChange: (v: T) => void;
-  isDisabled?: (v: T) => boolean;
-}) {
-  return (
-    <div
-      className="flex overflow-hidden"
-      style={{ border: '1px solid #e2e8f0', borderRadius: 9999 }}
-    >
-      {options.map((o) => {
-        const disabled = isDisabled?.(o.value) ?? false;
-        return (
-          <button
-            key={o.value}
-            onClick={() => !disabled && onChange(o.value)}
-            className="transition-colors"
-            style={{
-              padding: '6px 14px',
-              fontSize: 12,
-              fontWeight: 500,
-              background: value === o.value ? 'var(--color-primary)' : 'transparent',
-              color: value === o.value ? '#ffffff' : disabled ? '#cbd5e1' : 'var(--color-neutral)',
-              border: 'none',
-              outline: 'none',
-              cursor: disabled ? 'not-allowed' : 'pointer',
-              opacity: disabled ? 0.5 : 1,
-            }}
-          >
-            {o.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
+// ToggleGroup is now in @/components/ui/ToggleGroup
 
 /** Pill-style subtab navigation */
 function SubtabBar({

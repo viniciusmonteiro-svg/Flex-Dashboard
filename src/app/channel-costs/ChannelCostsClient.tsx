@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ToggleGroup } from '@/components/ui/ToggleGroup';
 import { formatCurrency, formatMonth, formatMonthShort } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import type { ChannelDetailResponse, ChannelDetailRow } from '@/app/api/channel-costs/route';
@@ -108,47 +109,7 @@ function fmt(n: number) {
   return n === 0 ? '—' : formatCurrency(n * 100);
 }
 
-// ─── Shared UI primitives (Pipeline style) ────────────────────────────────────
-
-function ToggleGroup<T extends string>({
-  options,
-  value,
-  onChange,
-  isDisabled,
-}: {
-  options: { label: string; value: T }[];
-  value:   T;
-  onChange: (v: T) => void;
-  isDisabled?: (v: T) => boolean;
-}) {
-  return (
-    <div className="flex overflow-hidden" style={{ border: '1px solid #e2e8f0', borderRadius: 9999 }}>
-      {options.map((o) => {
-        const disabled = isDisabled?.(o.value) ?? false;
-        return (
-          <button
-            key={o.value}
-            onClick={() => !disabled && onChange(o.value)}
-            className="transition-colors"
-            style={{
-              padding: '6px 14px',
-              fontSize: 12,
-              fontWeight: 500,
-              background: value === o.value ? 'var(--color-primary)' : 'transparent',
-              color:      value === o.value ? '#ffffff' : disabled ? '#cbd5e1' : 'var(--color-neutral)',
-              border: 'none',
-              outline: 'none',
-              cursor: disabled ? 'not-allowed' : 'pointer',
-              opacity: disabled ? 0.5 : 1,
-            }}
-          >
-            {o.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
+// ToggleGroup is now in @/components/ui/ToggleGroup
 
 function LightSelect({
   value,
