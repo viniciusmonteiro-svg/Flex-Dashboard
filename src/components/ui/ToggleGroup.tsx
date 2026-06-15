@@ -16,7 +16,7 @@ export function ToggleGroup<T extends string>({
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        backgroundColor: 'var(--color-border)',
+        backgroundColor: '#D6E6F0',
         borderRadius: '8px',
         padding: '3px',
         gap: '2px',
@@ -37,17 +37,17 @@ export function ToggleGroup<T extends string>({
               fontWeight: active ? 600 : 400,
               letterSpacing: '-0.01em',
               cursor: disabled ? 'not-allowed' : 'pointer',
-              backgroundColor: active ? 'var(--color-surface)' : 'transparent',
+              backgroundColor: active ? 'var(--color-accent)' : 'transparent',
               color: disabled
-                ? 'var(--color-border-strong)'
+                ? '#9BB5C5'
                 : active
-                ? 'var(--color-primary)'
-                : 'var(--color-text-muted)',
+                ? '#FFFFFF'
+                : 'var(--color-primary)',
               border: 'none',
               borderRadius: '6px',
               outline: 'none',
               transition: 'background-color 0.12s ease, color 0.12s ease',
-              boxShadow: active ? '0 1px 3px rgba(6,44,67,0.1)' : 'none',
+              boxShadow: active ? '0 1px 4px rgba(0,180,216,0.3)' : 'none',
               whiteSpace: 'nowrap',
             }}
           >
