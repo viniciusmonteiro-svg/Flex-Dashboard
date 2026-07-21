@@ -53,9 +53,10 @@ const CHANNELS = [
 ] as const;
 
 // Financial rows whose description/memo should be redacted from display
-// to protect sensitive data (e.g. employee names in "60000 - Employee Costs")
+// to protect sensitive data (e.g. employee names in employee-related GL accounts)
 const REDACTED_DESCRIPTION_ROWS = new Set([
   '60000 - Employee Costs',
+  '60002 - Commissions',
 ]);
 
 type Channel = (typeof CHANNELS)[number];
