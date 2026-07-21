@@ -344,7 +344,9 @@ export default function VendorClassificationsClient() {
 
           return (
             <div>
-              <span className="font-mono text-xs text-gray-900">{entity_name}</span>
+              <span className="font-mono text-xs text-gray-900">
+                {isRedacted ? '-Redacted-' : entity_name}
+              </span>
               {financial_row && (
                 <div className="mt-0.5 font-mono text-[11px] text-gray-400 truncate max-w-xs">
                   {financial_row}
