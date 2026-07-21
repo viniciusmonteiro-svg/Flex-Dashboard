@@ -52,6 +52,12 @@ const CHANNELS = [
   'Unclassified',
 ] as const;
 
+// Financial rows whose description/memo should be redacted from display
+// to protect sensitive data (e.g. employee names in "60000 - Employee Costs")
+const REDACTED_DESCRIPTION_ROWS = new Set([
+  '60000 - Employee Costs',
+]);
+
 type Channel = (typeof CHANNELS)[number];
 
 function rowKey(r: Pick<VendorClassificationRow, 'financial_row' | 'entity_name'>) {
@@ -304,15 +310,13 @@ export default function VendorClassificationsClient() {
         header: 'Vendor / Entity',
         cell: ({ row }) => {
           const { entity_name, has_name, financial_row, description } = row.original;
+          const isRedacted = REDACTED_DESCRIPTION_ROWS.has(financial_row);
 
           if (!has_name) {
             // Name (col G) was blank — show "-Unassigned-" as primary label.
             // entity_name holds the description/memo text (for DB uniqueness);
             // show it as the italic subtitle so the user can identify the expense.
-            const subtitleText = description ?? entity_name;
-            const subtitle = subtitleText.length > 80
-              ? subtitleText.slice(0, 80) + '…'
-              : subtitleText;
+            // Skip showing description for rows that contain sensitive data.
             return (
               <div>
                 <span className="text-xs text-gray-900">-Unassigned-</span>
@@ -321,12 +325,19 @@ export default function VendorClassificationsClient() {
                     {financial_row}
                   </div>
                 )}
-                <div
-                  className="mt-0.5 text-[11px] italic text-gray-400 max-w-xs"
-                  title={subtitleText}
-                >
-                  {subtitle}
-                </div>
+                {!isRedacted && description && (
+                  <div
+                    className="mt-0.5 text-[11px] italic text-gray-400 max-w-xs"
+                    title={description}
+                  >
+                    {description.length > 80 ? description.slice(0, 80) + '…' : description}
+                  </div>
+                )}
+                {isRedacted && (
+                  <div className="mt-0.5 text-[11px] italic text-gray-400">
+                    [Description hidden]
+                  </div>
+                )}
               </div>
             );
           }
