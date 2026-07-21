@@ -56,7 +56,10 @@ const CHANNELS = [
 // to protect sensitive data (e.g. employee names in employee-related GL accounts)
 const REDACTED_DESCRIPTION_ROWS = new Set([
   '60000 - Employee Costs',
+  '60001 - Wages & Salaries',
   '60002 - Commissions',
+  '60003 - PTO Wage/Salary Accrual',
+  '60004 - Bonuses',
 ]);
 
 type Channel = (typeof CHANNELS)[number];
